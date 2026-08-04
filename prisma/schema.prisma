@@ -1,0 +1,129 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Admin {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+}
+
+model Company {
+  id             String        @id @default(cuid())
+  name           String
+  domain         String
+  instagramUrl   String?
+  tiktokUrl      String?
+  amazonUrl      String?
+  facebookUrl    String?
+  websiteUrl     String
+  heroSku        String?
+  skuPrice       String?
+  archetype      String? // "Established DTC" | "Nodpod-style emerging" | "Strategic scale" | "Fragile"
+  priority       String? // "High" | "Medium-High" | "Medium" | "Low-Medium" | "Low"
+  estRevenue     String?
+  revenueConf    String? // "High" | "Medium" | "Low"
+  ttsStatus      String?
+  accountThesis  String?       @db.Text
+  cogsNotes      String?       @db.Text
+  parentCompany  String?
+  parentRole     String? // "owns this brand" | "manages marketing budget" | "sibling brand" etc.
+  siblingBrands  String[] // array of related brand names under the same parent
+  status         String        @default("proposed") // proposed | selected | rejected | prospecting | prospected | outreach_active | dormant
+  discoveryRunId String?
+  discoveryRun   DiscoveryRun? @relation(fields: [discoveryRunId], references: [id])
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  contacts       Contact[]
+  feedback       Feedback[]
+  exclusionCheck ExclusionCheck?
+}
+
+model ExclusionCheck {
+  id          String   @id @default(cuid())
+  companyId   String   @unique
+  company     Company  @relation(fields: [companyId], references: [id])
+  isExcluded  Boolean
+  matchedName String?
+  checkedAt   DateTime @default(now())
+}
+
+model ExcludedBrand {
+  id      String   @id @default(cuid())
+  name    String   @unique
+  source  String   @default("prior-prospects-import")
+  addedAt DateTime @default(now())
+}
+
+model DiscoveryRun {
+  id        String     @id @default(cuid())
+  prompt    String     @db.Text // the criteria the admin gave, e.g. "beauty brands $3-30M"
+  createdAt DateTime   @default(now())
+  companies Company[]
+  feedback  Feedback[]
+}
+
+model Contact {
+  id           String   @id @default(cuid())
+  companyId    String
+  company      Company  @relation(fields: [companyId], references: [id])
+  name         String
+  title        String
+  email        String?
+  emailStatus  String? // "verified" | "unavailable" | "guessed"
+  linkedin     String?
+  location     String?
+  decisionRole String // "Economic buyer" | "Functional owner" | "Operational champion" | "Influencer/router" | "Low relevance"
+  selected     Boolean  @default(false)
+  apolloId     String?
+  createdAt    DateTime @default(now())
+
+  emails Email[]
+}
+
+model Email {
+  id              String    @id @default(cuid())
+  contactId       String
+  contact         Contact   @relation(fields: [contactId], references: [id])
+  sequenceStep    Int // 0 = first email, 1 = follow-up 1, 2 = follow-up 2...
+  subject         String
+  body            String    @db.Text
+  status          String    @default("draft") // draft | approved | sent | replied | bounced | cancelled
+  claimsNotToMake String?   @db.Text // populated by Claude per outreach-package.md discipline
+  scheduledFor    DateTime?
+  sentAt          DateTime?
+  approvedAt      DateTime?
+  approvedBy      String?
+  resendMessageId String?
+  createdAt       DateTime  @default(now())
+}
+
+model Feedback {
+  id             String        @id @default(cuid())
+  scope          String // "discovery" | "prospecting" | "drafting" | "company" | "contact"
+  companyId      String?
+  company        Company?      @relation(fields: [companyId], references: [id])
+  discoveryRunId String?
+  discoveryRun   DiscoveryRun? @relation(fields: [discoveryRunId], references: [id])
+  note           String        @db.Text
+  createdAt      DateTime      @default(now())
+}
+
+model Settings {
+  id                   String   @id @default(cuid())
+  followUp1DelayDays   Int      @default(4)
+  followUp2DelayDays   Int      @default(8)
+  sequenceLength       Int      @default(3)
+  autoApproveFollowUps Boolean  @default(false)
+  updatedAt            DateTime @updatedAt
+}
