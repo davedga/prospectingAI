@@ -18,7 +18,7 @@ export default function LoginPage() {
             DGA Prospecting
           </CardTitle>
           <p className="text-sm text-muted-foreground">
-            Sign in to continue.
+            Enter an email to continue.
           </p>
         </CardHeader>
         <CardContent>
@@ -30,16 +30,6 @@ export default function LoginPage() {
                 name="email"
                 type="email"
                 autoComplete="email"
-                required
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
                 required
               />
             </div>
