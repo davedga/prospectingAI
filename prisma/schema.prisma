@@ -120,12 +120,14 @@ model Feedback {
 }
 
 model Settings {
-  id                   String   @id @default(cuid())
-  followUp1DelayDays   Int      @default(4)
+  id                    String   @id @default(cuid())
+  followUp1DelayDays    Int      @default(4)
   followUp2DelayDays    Int      @default(8)
   sequenceLength        Int      @default(3)
   autoDraftFirstEmails  Boolean  @default(true)
   autoGenerateFollowUps Boolean  @default(true)
+  autoApproveFirstEmails Boolean @default(false)
   autoApproveFollowUps  Boolean  @default(false)
+  emailSignature        String?  @db.Text
   updatedAt             DateTime @updatedAt
 }

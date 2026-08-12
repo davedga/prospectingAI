@@ -1,6 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { anthropic, CLAUDE_MODEL } from "@/lib/anthropic";
 import { prisma } from "@/lib/prisma";
+import { getSettings } from "@/lib/settings";
 
 const DRAFT_EMAIL_TOOL = {
   name: "draft_email",
@@ -46,7 +47,11 @@ export async function callDraftTool(systemPrompt: string, userPrompt: string) {
   return toolUse.input as { subject: string; body: string; claimsNotToMake: string };
 }
 
-export async function draftFirstEmail(contactId: string, feedbackNote?: string) {
+export async function draftFirstEmail(
+  contactId: string,
+  feedbackNote?: string,
+  autoTrigger = false
+) {
   const contact = await prisma.contact.findUniqueOrThrow({
     where: { id: contactId },
     include: {
@@ -94,6 +99,12 @@ Draft the first outreach email (sequence step 0) to this contact.`;
 
   const draft = await callDraftTool(systemPrompt, userPrompt);
 
+  const settings = autoTrigger ? await getSettings() : null;
+  const shouldAutoApprove = Boolean(settings?.autoApproveFirstEmails);
+  const statusFields = shouldAutoApprove
+    ? { status: "approved", approvedAt: new Date(), approvedBy: "auto" }
+    : { status: "draft" };
+
   const existing = await prisma.email.findFirst({
     where: { contactId, sequenceStep: 0 },
   });
@@ -105,7 +116,7 @@ Draft the first outreach email (sequence step 0) to this contact.`;
         subject: draft.subject,
         body: draft.body,
         claimsNotToMake: draft.claimsNotToMake,
-        status: "draft",
+        ...statusFields,
       },
     });
   }
@@ -117,7 +128,7 @@ Draft the first outreach email (sequence step 0) to this contact.`;
       subject: draft.subject,
       body: draft.body,
       claimsNotToMake: draft.claimsNotToMake,
-      status: "draft",
+      ...statusFields,
     },
   });
 }

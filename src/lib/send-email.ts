@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { resend, OUTREACH_FROM_ADDRESS } from "@/lib/resend";
 import { scheduleNextFollowUp } from "@/lib/followups";
+import { getSettings } from "@/lib/settings";
 import type { Prisma } from "@/generated/prisma/client";
 
 type EmailWithContact = Prisma.EmailGetPayload<{
@@ -12,11 +13,16 @@ export async function sendEmailAndAdvanceSequence(email: EmailWithContact) {
     return { ok: false as const, error: "Contact has no email address." };
   }
 
+  const settings = await getSettings();
+  const body = settings.emailSignature
+    ? `${email.body}\n\n${settings.emailSignature}`
+    : email.body;
+
   const sendResult = await resend.emails.send({
     from: OUTREACH_FROM_ADDRESS,
     to: email.contact.email,
     subject: email.subject,
-    text: email.body,
+    text: body,
   });
 
   if (sendResult.error) {

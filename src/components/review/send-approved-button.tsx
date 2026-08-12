@@ -17,11 +17,18 @@ export function SendApprovedButton({ count }: { count: number }) {
         return;
       }
       const data = await res.json();
-      const succeeded = data.results.filter((r: { ok: boolean }) => r.ok).length;
-      const failed = data.results.length - succeeded;
-      toast.success(
-        failed > 0 ? `Sent ${succeeded}, ${failed} failed.` : `Sent ${succeeded} email(s).`
-      );
+      const results = data.results as { emailId: string; ok: boolean; error?: string }[];
+      const succeeded = results.filter((r) => r.ok).length;
+      const failures = results.filter((r) => !r.ok);
+
+      if (failures.length > 0) {
+        toast.error(
+          `Sent ${succeeded}, ${failures.length} failed: ${failures[0].error ?? "unknown error"}`,
+          { duration: 15000 }
+        );
+      } else {
+        toast.success(`Sent ${succeeded} email(s).`);
+      }
       router.refresh();
     });
   };

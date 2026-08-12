@@ -8,9 +8,10 @@ export async function POST(
   const { id } = await params;
   const body = await request.json().catch(() => ({}));
   const feedbackNote = body?.feedbackNote as string | undefined;
+  const auto = Boolean(body?.auto);
 
   try {
-    const email = await draftFirstEmail(id, feedbackNote);
+    const email = await draftFirstEmail(id, feedbackNote, auto);
     return NextResponse.json(email);
   } catch (error) {
     console.error(`Drafting failed for contact ${id}`, error);

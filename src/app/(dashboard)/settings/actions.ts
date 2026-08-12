@@ -12,7 +12,9 @@ export async function updateSettings(formData: FormData) {
   const sequenceLength = Number(formData.get("sequenceLength"));
   const autoDraftFirstEmails = formData.get("autoDraftFirstEmails") === "on";
   const autoGenerateFollowUps = formData.get("autoGenerateFollowUps") === "on";
+  const autoApproveFirstEmails = formData.get("autoApproveFirstEmails") === "on";
   const autoApproveFollowUps = formData.get("autoApproveFollowUps") === "on";
+  const emailSignature = (formData.get("emailSignature") as string) || null;
 
   await prisma.settings.update({
     where: { id: settings.id },
@@ -22,9 +24,25 @@ export async function updateSettings(formData: FormData) {
       sequenceLength,
       autoDraftFirstEmails,
       autoGenerateFollowUps,
+      autoApproveFirstEmails,
       autoApproveFollowUps,
+      emailSignature,
     },
   });
 
+  revalidatePath("/settings");
+  revalidatePath("/review");
+}
+
+export async function toggleAutoApprove(
+  key: "autoApproveFirstEmails" | "autoApproveFollowUps",
+  value: boolean
+) {
+  const settings = await getSettings();
+  await prisma.settings.update({
+    where: { id: settings.id },
+    data: { [key]: value },
+  });
+  revalidatePath("/review");
   revalidatePath("/settings");
 }
