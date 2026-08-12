@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { resend, OUTREACH_FROM_ADDRESS } from "@/lib/resend";
+import { sendGmailMessage } from "@/lib/gmail";
 import { scheduleNextFollowUp } from "@/lib/followups";
 import { getSettings } from "@/lib/settings";
 import type { Prisma } from "@/generated/prisma/client";
@@ -18,15 +18,25 @@ export async function sendEmailAndAdvanceSequence(email: EmailWithContact) {
     ? `${email.body}\n\n${settings.emailSignature}`
     : email.body;
 
-  const sendResult = await resend.emails.send({
-    from: OUTREACH_FROM_ADDRESS,
-    to: email.contact.email,
-    subject: email.subject,
-    text: body,
-  });
+  const fromAddress = process.env.ADMIN_EMAIL;
+  if (!fromAddress) {
+    return { ok: false as const, error: "ADMIN_EMAIL is not set." };
+  }
 
-  if (sendResult.error) {
-    return { ok: false as const, error: sendResult.error.message };
+  let messageId: string | undefined;
+  try {
+    const sendResult = await sendGmailMessage({
+      from: fromAddress,
+      to: email.contact.email,
+      subject: email.subject,
+      text: body,
+    });
+    messageId = sendResult.id;
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : "Gmail send failed.",
+    };
   }
 
   const sentAt = new Date();
@@ -35,7 +45,7 @@ export async function sendEmailAndAdvanceSequence(email: EmailWithContact) {
     data: {
       status: "sent",
       sentAt,
-      resendMessageId: sendResult.data?.id,
+      resendMessageId: messageId,
     },
   });
 
