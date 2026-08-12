@@ -30,14 +30,12 @@ export function EmailReviewCard({
   contactName,
   contactTitle,
   companyName,
-  allowRegenerate = true,
   onUpdated,
 }: {
   email: ReviewEmail;
   contactName: string;
   contactTitle: string;
   companyName: string;
-  allowRegenerate?: boolean;
   onUpdated?: (email: ReviewEmail) => void;
 }) {
   const [subject, setSubject] = useState(email.subject);
@@ -50,7 +48,7 @@ export function EmailReviewCard({
 
   const handleRegenerate = () => {
     startTransition(async () => {
-      const res = await fetch(`/api/contacts/${email.contactId}/draft-email`, {
+      const res = await fetch(`/api/emails/${email.id}/draft`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ feedbackNote: regenNote }),
@@ -140,25 +138,21 @@ export function EmailReviewCard({
 
         {!isFinal && (
           <div className="flex flex-wrap items-center gap-2 pt-1">
-            {allowRegenerate && (
-              <>
-                <Input
-                  placeholder="Quick note for regenerate (optional)"
-                  value={regenNote}
-                  onChange={(e) => setRegenNote(e.target.value)}
-                  className="max-w-xs"
-                  disabled={isPending}
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleRegenerate}
-                  disabled={isPending}
-                >
-                  Regenerate
-                </Button>
-              </>
-            )}
+            <Input
+              placeholder="Quick note for regenerate (optional)"
+              value={regenNote}
+              onChange={(e) => setRegenNote(e.target.value)}
+              className="max-w-xs"
+              disabled={isPending}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRegenerate}
+              disabled={isPending}
+            >
+              Regenerate
+            </Button>
             <Button size="sm" onClick={handleApprove} disabled={isPending}>
               Approve
             </Button>

@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { callDraftTool, CLAIMS_DISCIPLINE } from "@/lib/drafting";
 
-export async function generateFollowUpContent(emailId: string) {
+export async function generateFollowUpContent(emailId: string, feedbackNote?: string) {
   const email = await prisma.email.findUniqueOrThrow({
     where: { id: emailId },
     include: {
@@ -53,6 +53,7 @@ ${
     : "No prior touches on file."
 }
 ${daysSinceLastTouch !== null ? `It has been ${daysSinceLastTouch} day(s) since the last touch.` : ""}
+${feedbackNote ? `\nQuick note for this regeneration: ${feedbackNote}` : ""}
 
 No reply yet. Draft a follow-up that adds a new angle or new information versus the previous touch(es) — never "just checking in."`;
 

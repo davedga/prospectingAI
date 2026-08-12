@@ -10,6 +10,8 @@ export async function updateSettings(formData: FormData) {
   const followUp1DelayDays = Number(formData.get("followUp1DelayDays"));
   const followUp2DelayDays = Number(formData.get("followUp2DelayDays"));
   const sequenceLength = Number(formData.get("sequenceLength"));
+  const autoDraftFirstEmails = formData.get("autoDraftFirstEmails") === "on";
+  const autoGenerateFollowUps = formData.get("autoGenerateFollowUps") === "on";
   const autoApproveFollowUps = formData.get("autoApproveFollowUps") === "on";
 
   await prisma.settings.update({
@@ -18,6 +20,8 @@ export async function updateSettings(formData: FormData) {
       followUp1DelayDays,
       followUp2DelayDays,
       sequenceLength,
+      autoDraftFirstEmails,
+      autoGenerateFollowUps,
       autoApproveFollowUps,
     },
   });

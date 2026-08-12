@@ -14,19 +14,87 @@ export default async function SettingsPage() {
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Settings</h1>
         <p className="text-sm text-neutral-500">
-          Follow-up cadence and auto-approval apply globally, across every
-          active sequence.
+          These apply globally, across every company and sequence.
         </p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-semibold">
-            Follow-up sequencing
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form action={updateSettings} className="max-w-md space-y-5">
+      <form action={updateSettings} className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-semibold">
+              Automation — per pipeline step
+            </CardTitle>
+            <p className="text-xs text-neutral-500">
+              Discovery and Prospecting are always manual — there&apos;s no
+              scheduled trigger for either, you run them on demand. These
+              toggles control the steps that can otherwise run without you.
+            </p>
+          </CardHeader>
+          <CardContent className="max-w-lg space-y-4">
+            <div className="flex items-start gap-2">
+              <Checkbox
+                id="autoDraftFirstEmails"
+                name="autoDraftFirstEmails"
+                defaultChecked={settings.autoDraftFirstEmails}
+                className="mt-0.5"
+              />
+              <div>
+                <Label htmlFor="autoDraftFirstEmails" className="font-normal">
+                  Auto-draft first emails when contacts are selected
+                </Label>
+                <p className="text-xs text-neutral-500">
+                  If off, drafting requires clicking &quot;Generate
+                  Drafts&quot; on the company&apos;s drafting page instead of
+                  starting automatically.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start gap-2">
+              <Checkbox
+                id="autoGenerateFollowUps"
+                name="autoGenerateFollowUps"
+                defaultChecked={settings.autoGenerateFollowUps}
+                className="mt-0.5"
+              />
+              <div>
+                <Label htmlFor="autoGenerateFollowUps" className="font-normal">
+                  Auto-generate follow-up content when due (daily cron)
+                </Label>
+                <p className="text-xs text-neutral-500">
+                  If off, the cron does nothing — draft follow-ups from the
+                  Review Queue&apos;s &quot;Upcoming follow-ups&quot; list
+                  instead, whenever you want.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start gap-2">
+              <Checkbox
+                id="autoApproveFollowUps"
+                name="autoApproveFollowUps"
+                defaultChecked={settings.autoApproveFollowUps}
+                className="mt-0.5"
+              />
+              <div>
+                <Label htmlFor="autoApproveFollowUps" className="font-normal">
+                  Auto-approve and send follow-ups (skip manual review)
+                </Label>
+                <p className="text-xs text-neutral-500">
+                  Only affects follow-ups that were already generated —
+                  first emails always require manual approval regardless of
+                  this setting.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-semibold">
+              Follow-up cadence
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="max-w-md space-y-5">
             <div className="space-y-1.5">
               <Label htmlFor="followUp1DelayDays">
                 Follow-up 1 delay (days after first email)
@@ -67,20 +135,11 @@ export default async function SettingsPage() {
                 required
               />
             </div>
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="autoApproveFollowUps"
-                name="autoApproveFollowUps"
-                defaultChecked={settings.autoApproveFollowUps}
-              />
-              <Label htmlFor="autoApproveFollowUps" className="font-normal">
-                Auto-approve and send follow-ups (skip manual review)
-              </Label>
-            </div>
-            <Button type="submit">Save settings</Button>
-          </form>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+
+        <Button type="submit">Save settings</Button>
+      </form>
     </div>
   );
 }

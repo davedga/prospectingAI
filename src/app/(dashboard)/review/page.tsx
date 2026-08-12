@@ -2,9 +2,10 @@ import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmailReviewCard } from "@/components/drafting/email-review-card";
 import { SendApprovedButton } from "@/components/review/send-approved-button";
+import { UpcomingFollowUps } from "@/components/review/upcoming-followups";
 
 export default async function ReviewPage() {
-  const [draftEmails, approvedEmails] = await Promise.all([
+  const [draftEmails, approvedEmails, upcomingFollowUps] = await Promise.all([
     prisma.email.findMany({
       where: { status: "draft", subject: { not: "" } },
       include: { contact: { include: { company: true } } },
@@ -14,6 +15,11 @@ export default async function ReviewPage() {
       where: { status: "approved" },
       include: { contact: { include: { company: true } } },
       orderBy: { approvedAt: "asc" },
+    }),
+    prisma.email.findMany({
+      where: { status: "draft", sequenceStep: { gt: 0 }, subject: "" },
+      include: { contact: { include: { company: true } } },
+      orderBy: { scheduledFor: "asc" },
     }),
   ]);
 
@@ -46,10 +52,38 @@ export default async function ReviewPage() {
                   contactName={email.contact.name}
                   contactTitle={email.contact.title}
                   companyName={email.contact.company.name}
-                  allowRegenerate={email.sequenceStep === 0}
                 />
               ))}
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm font-semibold">
+            Upcoming follow-ups ({upcomingFollowUps.length})
+          </CardTitle>
+          <p className="text-xs text-neutral-500">
+            Not drafted yet — either scheduled for later, or waiting on the
+            daily cron. Draft one early if you don&apos;t want to wait.
+          </p>
+        </CardHeader>
+        <CardContent>
+          {upcomingFollowUps.length === 0 ? (
+            <p className="text-sm text-neutral-500">No follow-ups pending.</p>
+          ) : (
+            <UpcomingFollowUps
+              items={upcomingFollowUps.map((e) => ({
+                id: e.id,
+                sequenceStep: e.sequenceStep,
+                scheduledFor: e.scheduledFor?.toISOString() ?? null,
+                contact: {
+                  name: e.contact.name,
+                  company: { name: e.contact.company.name },
+                },
+              }))}
+            />
           )}
         </CardContent>
       </Card>

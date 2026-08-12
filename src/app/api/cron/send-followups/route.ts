@@ -10,6 +10,16 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
+  const settings = await getSettings();
+
+  if (!settings.autoGenerateFollowUps) {
+    return NextResponse.json({
+      processed: 0,
+      results: [],
+      skipped: "autoGenerateFollowUps is off — follow-ups must be drafted manually.",
+    });
+  }
+
   const dueFollowUps = await prisma.email.findMany({
     where: {
       status: "draft",
@@ -19,7 +29,6 @@ export async function GET(request: Request) {
     },
   });
 
-  const settings = await getSettings();
   const results: { emailId: string; ok: boolean; error?: string }[] = [];
 
   for (const pending of dueFollowUps) {

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { getSettings } from "@/lib/settings";
 import { DraftingBoard } from "@/components/drafting/drafting-board";
 
 export default async function CompanyDraftingPage({
@@ -9,6 +10,8 @@ export default async function CompanyDraftingPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+
+  const settings = await getSettings();
 
   const company = await prisma.company.findUnique({
     where: { id },
@@ -68,7 +71,11 @@ export default async function CompanyDraftingPage({
           No selected contacts for this company yet.
         </p>
       ) : (
-        <DraftingBoard companyName={company.name} contacts={contacts} />
+        <DraftingBoard
+          companyName={company.name}
+          contacts={contacts}
+          autoDraft={settings.autoDraftFirstEmails}
+        />
       )}
     </div>
   );
