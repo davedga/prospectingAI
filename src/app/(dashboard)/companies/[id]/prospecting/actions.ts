@@ -11,9 +11,14 @@ export async function confirmContactSelection(
 ) {
   const contacts = await prisma.contact.findMany({
     where: { companyId },
-    select: { id: true },
+    select: { id: true, email: true },
   });
-  const selectedSet = new Set(selectedContactIds);
+  const requestedSet = new Set(selectedContactIds);
+  // Contacts without an email can never be sent to — never let them through
+  // even if a client somehow submits their id.
+  const selectedSet = new Set(
+    contacts.filter((c) => requestedSet.has(c.id) && c.email).map((c) => c.id)
+  );
 
   await prisma.$transaction([
     prisma.contact.updateMany({

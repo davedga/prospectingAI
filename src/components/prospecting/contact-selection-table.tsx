@@ -41,12 +41,18 @@ export function ContactSelectionTable({
   contacts: ContactRow[];
 }) {
   const [selected, setSelected] = useState<Set<string>>(
-    () => new Set(contacts.filter((c) => c.selected || c.decisionRole !== "Low relevance").map((c) => c.id))
+    () =>
+      new Set(
+        contacts
+          .filter((c) => Boolean(c.email) && (c.selected || c.decisionRole !== "Low relevance"))
+          .map((c) => c.id)
+      )
   );
   const [feedback, setFeedback] = useState("");
   const [isPending, startTransition] = useTransition();
 
-  const toggle = (id: string) => {
+  const toggle = (id: string, hasEmail: boolean) => {
+    if (!hasEmail) return;
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -80,12 +86,16 @@ export function ContactSelectionTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {contacts.map((contact) => (
-              <TableRow key={contact.id}>
+            {contacts.map((contact) => {
+              const hasEmail = Boolean(contact.email);
+              return (
+              <TableRow key={contact.id} className={!hasEmail ? "opacity-60" : undefined}>
                 <TableCell>
                   <Checkbox
                     checked={selected.has(contact.id)}
-                    onCheckedChange={() => toggle(contact.id)}
+                    onCheckedChange={() => toggle(contact.id, hasEmail)}
+                    disabled={!hasEmail}
+                    title={!hasEmail ? "No email on file — can't be selected for outreach." : undefined}
                   />
                 </TableCell>
                 <TableCell className="font-medium">{contact.name}</TableCell>
@@ -94,7 +104,7 @@ export function ContactSelectionTable({
                   <Badge variant="outline">{contact.decisionRole}</Badge>
                 </TableCell>
                 <TableCell>
-                  <div>{contact.email ?? "—"}</div>
+                  <div>{contact.email ?? "No email found"}</div>
                   {contact.emailStatus && (
                     <Badge
                       variant={EMAIL_STATUS_VARIANT[contact.emailStatus] ?? "outline"}
@@ -119,7 +129,8 @@ export function ContactSelectionTable({
                   )}
                 </TableCell>
               </TableRow>
-            ))}
+              );
+            })}
           </TableBody>
         </Table>
       </div>
