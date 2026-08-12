@@ -81,7 +81,7 @@ export const BUYING_COMMITTEE_TITLES = [
 
 export async function searchPeople(organizationId: string) {
   const data = await apolloPost<{ people: ApolloPerson[] }>(
-    "/mixed_people/search",
+    "/mixed_people/api_search",
     {
       organization_ids: [organizationId],
       person_titles: BUYING_COMMITTEE_TITLES,
