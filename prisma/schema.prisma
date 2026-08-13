@@ -105,6 +105,10 @@ model Email {
   approvedAt      DateTime?
   approvedBy      String?
   resendMessageId String?
+  openedAt        DateTime?
+  openCount       Int       @default(0)
+  clickedAt       DateTime?
+  clickCount      Int       @default(0)
   createdAt       DateTime  @default(now())
 }
 

@@ -19,7 +19,7 @@ export async function sendEmailAndAdvanceSequence(email: EmailWithContact) {
     ? `${email.body}\n\n${settings.emailSignature}`
     : email.body;
   const html = settings.emailSignatureHtml
-    ? bodyToHtml(email.body, settings.emailSignatureHtml)
+    ? bodyToHtml(email.body, settings.emailSignatureHtml, email.id)
     : undefined;
 
   const fromAddress = process.env.ADMIN_EMAIL;

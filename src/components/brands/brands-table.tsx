@@ -29,6 +29,9 @@ export type BrandRow = {
   priority: string | null;
   discoveryPrompt: string | null;
   contactCount: number;
+  sentCount: number;
+  openedCount: number;
+  clickedCount: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -112,6 +115,7 @@ export function BrandsTable({ brands }: { brands: BrandRow[] }) {
               <TableHead>Archetype</TableHead>
               <TableHead>Priority</TableHead>
               <TableHead>Contacts</TableHead>
+              <TableHead>Engagement</TableHead>
               <TableHead>Discovered via</TableHead>
               <TableHead>Last activity</TableHead>
             </TableRow>
@@ -146,6 +150,23 @@ export function BrandsTable({ brands }: { brands: BrandRow[] }) {
                     {brand.priority && <Badge variant="outline">{brand.priority}</Badge>}
                   </TableCell>
                   <TableCell>{brand.contactCount}</TableCell>
+                  <TableCell className="text-xs text-neutral-600">
+                    {brand.sentCount === 0 ? (
+                      "—"
+                    ) : (
+                      <span>
+                        {brand.sentCount} sent
+                        {" · "}
+                        <span className={brand.openedCount > 0 ? "text-emerald-600 font-medium" : ""}>
+                          {brand.openedCount} opened
+                        </span>
+                        {" · "}
+                        <span className={brand.clickedCount > 0 ? "text-emerald-600 font-medium" : ""}>
+                          {brand.clickedCount} clicked
+                        </span>
+                      </span>
+                    )}
+                  </TableCell>
                   <TableCell className="max-w-xs truncate text-neutral-500">
                     {brand.discoveryPrompt ?? "—"}
                   </TableCell>

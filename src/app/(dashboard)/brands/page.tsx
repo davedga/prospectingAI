@@ -7,21 +7,35 @@ export default async function BrandsPage() {
     include: {
       discoveryRun: { select: { prompt: true } },
       _count: { select: { contacts: true } },
+      contacts: {
+        select: {
+          emails: {
+            where: { status: "sent" },
+            select: { openedAt: true, clickedAt: true },
+          },
+        },
+      },
     },
   });
 
-  const brands: BrandRow[] = companies.map((c) => ({
-    id: c.id,
-    name: c.name,
-    domain: c.domain,
-    status: c.status,
-    archetype: c.archetype,
-    priority: c.priority,
-    discoveryPrompt: c.discoveryRun?.prompt ?? null,
-    contactCount: c._count.contacts,
-    createdAt: c.createdAt.toISOString(),
-    updatedAt: c.updatedAt.toISOString(),
-  }));
+  const brands: BrandRow[] = companies.map((c) => {
+    const sentEmails = c.contacts.flatMap((contact) => contact.emails);
+    return {
+      id: c.id,
+      name: c.name,
+      domain: c.domain,
+      status: c.status,
+      archetype: c.archetype,
+      priority: c.priority,
+      discoveryPrompt: c.discoveryRun?.prompt ?? null,
+      contactCount: c._count.contacts,
+      sentCount: sentEmails.length,
+      openedCount: sentEmails.filter((e) => e.openedAt).length,
+      clickedCount: sentEmails.filter((e) => e.clickedAt).length,
+      createdAt: c.createdAt.toISOString(),
+      updatedAt: c.updatedAt.toISOString(),
+    };
+  });
 
   return (
     <div className="space-y-6">

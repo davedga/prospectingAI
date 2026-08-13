@@ -41,6 +41,7 @@ gets you in; there's no password.
 | `GMAIL_CLIENT_ID` / `GMAIL_CLIENT_SECRET` / `GMAIL_REFRESH_TOKEN` | OAuth credentials for sending as `ADMIN_EMAIL` via the Gmail API — see setup below. |
 | `RESEND_INBOUND_WEBHOOK_SECRET` | Only relevant if you wire up Resend-based reply detection later — not currently connected to anything, since sending moved to Gmail. |
 | `CRON_SECRET` | Vercel Cron sends this as `Authorization: Bearer <value>`. |
+| `APP_URL` | Your deployed origin (e.g. `https://prospecting-ai-seven.vercel.app`), no trailing slash. Used to build the open-tracking pixel and click-tracking links embedded in sent HTML emails. Leave blank locally — tracking is skipped (no wrapping/pixel) when unset, since `localhost` URLs aren't reachable by recipients anyway. |
 
 ### Gmail API setup (for `GMAIL_CLIENT_ID` / `GMAIL_CLIENT_SECRET` / `GMAIL_REFRESH_TOKEN`)
 
@@ -98,6 +99,15 @@ accounts. Steps:
 7. **Verify the cron job** is registered under the Vercel project's Cron
    Jobs tab, and that `CRON_SECRET` matches what's in your env vars (Vercel
    sends it automatically as a Bearer token to routes protected this way).
+
+## Email open/click tracking
+
+Every sent email's HTML body gets a 1x1 tracking pixel (`/api/track/open/[emailId]`)
+and all `href` links get rewritten through a redirect (`/api/track/click/[emailId]`),
+recording `openedAt`/`openCount`/`clickedAt`/`clickCount` on the `Email` row. Both
+routes are exempted from the login middleware in `src/proxy.ts` since recipients'
+mail clients hit them with no session. Aggregated counts per company show up in the
+Brands page's "Engagement" column. Requires `APP_URL` to be set — see above.
 
 ## Notes
 
