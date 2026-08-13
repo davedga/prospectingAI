@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { sendGmailMessage } from "@/lib/gmail";
 import { scheduleNextFollowUp } from "@/lib/followups";
 import { getSettings } from "@/lib/settings";
+import { bodyToHtml } from "@/lib/email-html";
 import type { Prisma } from "@/generated/prisma/client";
 
 type EmailWithContact = Prisma.EmailGetPayload<{
@@ -14,9 +15,12 @@ export async function sendEmailAndAdvanceSequence(email: EmailWithContact) {
   }
 
   const settings = await getSettings();
-  const body = settings.emailSignature
+  const text = settings.emailSignature
     ? `${email.body}\n\n${settings.emailSignature}`
     : email.body;
+  const html = settings.emailSignatureHtml
+    ? bodyToHtml(email.body, settings.emailSignatureHtml)
+    : undefined;
 
   const fromAddress = process.env.ADMIN_EMAIL;
   if (!fromAddress) {
@@ -29,7 +33,8 @@ export async function sendEmailAndAdvanceSequence(email: EmailWithContact) {
       from: fromAddress,
       to: email.contact.email,
       subject: email.subject,
-      text: body,
+      text,
+      html,
     });
     messageId = sendResult.id;
   } catch (error) {

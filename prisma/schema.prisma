@@ -129,6 +129,7 @@ model Settings {
   autoApproveFirstEmails Boolean  @default(false)
   autoApproveFollowUps   Boolean  @default(false)
   emailSignature         String?  @db.Text
+  emailSignatureHtml     String?  @db.Text
   standingDiscoveryBrief String?  @db.Text
   autoRunDiscovery       Boolean  @default(false)
   autoSelectDiscovered   Boolean  @default(false)

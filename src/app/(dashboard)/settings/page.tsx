@@ -7,6 +7,23 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { updateSettings } from "./actions";
 
+const LOGO_URL =
+  "https://lh7-rt.googleusercontent.com/docsz/AD_4nXdmprLPPbIK692SZtwrP8kYbgi-_EPzhWBNTFh8qOPjmZ4icw0TXMPRuBVZV_PcAYtHmYw9MCTYCV7FSa5hS8CMc8U6kEPm0BRlvrFGpORnKauiASyHsUwRg4V1F6F-sCccqwck";
+
+const DEFAULT_SIGNATURE_HTML = `<table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, Helvetica, sans-serif; font-size: 13px; color: #000000;">
+  <tr>
+    <td style="padding-right: 14px; vertical-align: top;">
+      <img src="${LOGO_URL}" width="64" height="64" alt="Dallas Global Agency" style="border-radius: 50%; display: block; width: 64px; height: 64px;" />
+    </td>
+    <td style="vertical-align: top; line-height: 1.5;">
+      <div><strong>David Lakhter</strong></div>
+      <div>Head of Partnerships</div>
+      <div>Dallas Global <i>Agency</i> &nbsp;|&nbsp; <a href="https://www.dallasglobal.com" style="color: #1155cc; text-decoration: none;">www.dallasglobal.com</a></div>
+      <div><a href="https://www.linkedin.com/in/davidlakhter" style="color: #1155cc; text-decoration: none;">linkedin.com/in/davidlakhter</a></div>
+    </td>
+  </tr>
+</table>`;
+
 export default async function SettingsPage() {
   const settings = await getSettings();
 
@@ -258,18 +275,44 @@ export default async function SettingsPage() {
               Email signature
             </CardTitle>
             <p className="text-xs text-neutral-500">
-              Appended to the bottom of every email this app sends —
-              first touches and follow-ups alike.
+              Appended to the bottom of every email this app sends — first
+              touches and follow-ups alike. The HTML version below controls
+              what recipients actually see (logo, bold/italic, links); the
+              plain-text version underneath is only the fallback for
+              text-only mail clients.
             </p>
           </CardHeader>
-          <CardContent className="max-w-md">
-            <Textarea
-              id="emailSignature"
-              name="emailSignature"
-              rows={5}
-              placeholder={"Dave Lakhter\nDallas Global Agency\ndave@dallasglobal.com"}
-              defaultValue={settings.emailSignature ?? ""}
-            />
+          <CardContent className="max-w-lg space-y-5">
+            <div className="space-y-1.5">
+              <Label htmlFor="emailSignatureHtml">
+                HTML signature (what recipients see)
+              </Label>
+              <Textarea
+                id="emailSignatureHtml"
+                name="emailSignatureHtml"
+                rows={10}
+                className="font-mono text-xs"
+                defaultValue={settings.emailSignatureHtml ?? DEFAULT_SIGNATURE_HTML}
+              />
+              <p className="text-xs text-neutral-500">
+                Raw HTML, rendered inline into every sent email. Edit the
+                logo URL, name, title, or links here if anything&apos;s off —
+                there&apos;s no live preview, so double check with a real
+                send.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="emailSignature">
+                Plain-text fallback
+              </Label>
+              <Textarea
+                id="emailSignature"
+                name="emailSignature"
+                rows={5}
+                placeholder={"David Lakhter\nHead of Partnerships\nDallas Global Agency\ndave@dallasglobal.com"}
+                defaultValue={settings.emailSignature ?? ""}
+              />
+            </div>
           </CardContent>
         </Card>
 

@@ -15,6 +15,7 @@ export async function updateSettings(formData: FormData) {
   const autoApproveFirstEmails = formData.get("autoApproveFirstEmails") === "on";
   const autoApproveFollowUps = formData.get("autoApproveFollowUps") === "on";
   const emailSignature = (formData.get("emailSignature") as string) || null;
+  const emailSignatureHtml = (formData.get("emailSignatureHtml") as string) || null;
   const standingDiscoveryBrief = (formData.get("standingDiscoveryBrief") as string) || null;
   const autoRunDiscovery = formData.get("autoRunDiscovery") === "on";
   const autoSelectDiscovered = formData.get("autoSelectDiscovered") === "on";
@@ -31,6 +32,7 @@ export async function updateSettings(formData: FormData) {
       autoApproveFirstEmails,
       autoApproveFollowUps,
       emailSignature,
+      emailSignatureHtml,
       standingDiscoveryBrief,
       autoRunDiscovery,
       autoSelectDiscovered,

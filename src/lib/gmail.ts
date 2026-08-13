@@ -23,32 +23,60 @@ function encodeSubject(subject: string) {
   return `=?UTF-8?B?${Buffer.from(subject, "utf-8").toString("base64")}?=`;
 }
 
+function base64UrlEncode(input: string) {
+  return Buffer.from(input)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
 function buildRawMessage({
   from,
   to,
   subject,
   text,
+  html,
 }: {
   from: string;
   to: string;
   subject: string;
   text: string;
+  html?: string;
 }) {
-  const message = [
+  const headers = [
     `From: ${from}`,
     `To: ${to}`,
     `Subject: ${encodeSubject(subject)}`,
     "MIME-Version: 1.0",
+  ];
+
+  if (!html) {
+    const message = [...headers, 'Content-Type: text/plain; charset="UTF-8"', "", text].join(
+      "\r\n"
+    );
+    return base64UrlEncode(message);
+  }
+
+  const boundary = `boundary_${Math.random().toString(36).slice(2)}`;
+  const message = [
+    ...headers,
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    "",
+    `--${boundary}`,
     'Content-Type: text/plain; charset="UTF-8"',
     "",
     text,
+    "",
+    `--${boundary}`,
+    'Content-Type: text/html; charset="UTF-8"',
+    "",
+    html,
+    "",
+    `--${boundary}--`,
   ].join("\r\n");
 
-  return Buffer.from(message)
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
+  return base64UrlEncode(message);
 }
 
 export async function sendGmailMessage({
@@ -56,14 +84,16 @@ export async function sendGmailMessage({
   to,
   subject,
   text,
+  html,
 }: {
   from: string;
   to: string;
   subject: string;
   text: string;
+  html?: string;
 }) {
   const gmail = getGmailClient();
-  const raw = buildRawMessage({ from, to, subject, text });
+  const raw = buildRawMessage({ from, to, subject, text, html });
 
   const res = await gmail.users.messages.send({
     userId: "me",
