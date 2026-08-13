@@ -55,7 +55,7 @@ ${
 ${daysSinceLastTouch !== null ? `It has been ${daysSinceLastTouch} day(s) since the last touch.` : ""}
 ${feedbackNote ? `\nQuick note for this regeneration: ${feedbackNote}` : ""}
 
-No reply yet. Draft a follow-up that adds a new angle or new information versus the previous touch(es) — never "just checking in."`;
+No reply yet. Draft a follow-up that adds a new angle or new information versus the previous touch(es) — never "just checking in." End with a brief closing only (e.g. "Best," or "Thanks,") — do not sign with a name or company, a signature block is appended automatically after your draft. Never sign off using the recipient's own name.`;
 
   const draft = await callDraftTool(systemPrompt, userPrompt);
 

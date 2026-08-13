@@ -97,7 +97,7 @@ ${
 
 ${feedbackNote ? `Quick note for this regeneration: ${feedbackNote}` : ""}
 
-Draft the first outreach email (sequence step 0) to this contact.`;
+Draft the first outreach email (sequence step 0) to this contact. End with a brief closing only (e.g. "Best," or "Thanks,") — do not sign with a name or company, a signature block is appended automatically after your draft. Never sign off using the recipient's own name.`;
 
   const draft = await callDraftTool(systemPrompt, userPrompt);
 
