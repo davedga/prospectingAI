@@ -24,7 +24,9 @@ const DRAFT_EMAIL_TOOL = {
 export const CLAIMS_DISCIPLINE = `Non-negotiable rules for every email you draft:
 - Never fabricate a fact not present in the company/contact record: no invented GMV, margin, or COGS figures, and no "we know you need this" claims.
 - Keep first-touch emails to 80-120 words; follow-ups to 40-70 words.
-- Reference at least one concrete, specific detail about the company (SKU name, a real economics or TTS-status fact, the recipient's actual role) — never a generic template that could apply to any brand.
+- Reference at least one concrete, specific detail about the company (SKU name, a real economics or TTS-status fact) — never a generic template that could apply to any brand.
+- The contact's decision role (economic buyer / functional owner / operational champion / influencer-router) and title are a GUIDE for how to angle and structure the email — what to pitch, how directly, what the ask is. Do not literally name their title or role in the email body (never write something like "as the Ecommerce Manager..." or "given your role in..."). Let the framing imply it instead.
+- Avoid em dashes (—). If a sentence would naturally use one, either rewrite it as two sentences or use a single hyphen (-) instead. Do not overuse hyphens as a substitute either — prefer plain sentence structure.
 - Follow-ups must add new information or a new angle versus the previous touch — never "just checking in."
 - Respect multi-thread sequencing: a functional owner gets the primary technical/operational pitch; a routing/champion contact gets a lighter "who owns this decision" message; the economic buyer is only approached directly when warranted (large deal, no response from others, or a small/founder-led company where the founder is the economic buyer).
 - In claimsNotToMake, list anything you deliberately left vague or unclaimed due to lack of evidence.`;
