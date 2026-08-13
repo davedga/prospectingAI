@@ -8,6 +8,7 @@ const links = [
   { href: "/", label: "Dashboard" },
   { href: "/discovery", label: "Discovery" },
   { href: "/prospecting", label: "Prospecting" },
+  { href: "/brands", label: "Brands" },
   { href: "/review", label: "Review Queue" },
   { href: "/exclusions", label: "Exclusions" },
   { href: "/settings", label: "Settings" },
@@ -28,7 +29,7 @@ export function SidebarNav() {
             className={cn(
               "rounded-md px-3 py-2 text-sm font-medium transition-colors",
               isActive
-                ? "bg-neutral-900 text-white"
+                ? "bg-primary text-primary-foreground"
                 : "text-neutral-600 hover:bg-neutral-200/60 hover:text-neutral-900"
             )}
           >

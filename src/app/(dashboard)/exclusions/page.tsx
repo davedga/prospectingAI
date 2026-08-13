@@ -14,19 +14,38 @@ import { Badge } from "@/components/ui/badge";
 import { BulkImportBox } from "@/components/exclusions/bulk-import-box";
 import { addExcludedBrand, removeExcludedBrand } from "./actions";
 
-export default async function ExclusionsPage() {
-  const brands = await prisma.excludedBrand.findMany({
-    orderBy: { addedAt: "desc" },
-  });
+const PAGE_SIZE = 200;
+
+export default async function ExclusionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
+  const { q } = await searchParams;
+  const query = q?.trim();
+
+  const where = query
+    ? { name: { contains: query, mode: "insensitive" as const } }
+    : undefined;
+
+  const [brands, totalCount] = await Promise.all([
+    prisma.excludedBrand.findMany({
+      where,
+      orderBy: { addedAt: "desc" },
+      take: PAGE_SIZE,
+    }),
+    prisma.excludedBrand.count(),
+  ]);
 
   return (
     <div className="space-y-8">
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Exclusions</h1>
         <p className="text-sm text-neutral-500">
-          Brands already contacted or off-limits. Checked (fuzzy,
+          Brands already contacted or off-limits — checked (fuzzy,
           case-insensitive) before any company can be selected out of
-          Discovery.
+          Discovery. If you prospect a brand manually, outside the app, add
+          it here too so Discovery never re-suggests it.
         </p>
       </div>
 
@@ -59,14 +78,38 @@ export default async function ExclusionsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm font-semibold">
-            Excluded brands ({brands.length})
-          </CardTitle>
+          <div className="flex items-center justify-between gap-4">
+            <CardTitle className="text-sm font-semibold">
+              Excluded brands ({totalCount.toLocaleString()})
+            </CardTitle>
+            <form className="flex gap-2">
+              <Input
+                name="q"
+                placeholder="Search by name..."
+                defaultValue={query ?? ""}
+                className="w-64"
+              />
+              <Button type="submit" variant="outline" size="sm">
+                Search
+              </Button>
+            </form>
+          </div>
+          {query && (
+            <p className="text-xs text-neutral-500">
+              Showing matches for &quot;{query}&quot; (up to {PAGE_SIZE}).
+            </p>
+          )}
+          {!query && totalCount > PAGE_SIZE && (
+            <p className="text-xs text-neutral-500">
+              Showing the {PAGE_SIZE} most recently added — search to find a
+              specific brand across all {totalCount.toLocaleString()}.
+            </p>
+          )}
         </CardHeader>
         <CardContent>
           {brands.length === 0 ? (
             <p className="text-sm text-neutral-500">
-              No excluded brands yet.
+              {query ? "No matches." : "No excluded brands yet."}
             </p>
           ) : (
             <Table>
