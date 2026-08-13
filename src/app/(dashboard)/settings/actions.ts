@@ -15,6 +15,10 @@ export async function updateSettings(formData: FormData) {
   const autoApproveFirstEmails = formData.get("autoApproveFirstEmails") === "on";
   const autoApproveFollowUps = formData.get("autoApproveFollowUps") === "on";
   const emailSignature = (formData.get("emailSignature") as string) || null;
+  const standingDiscoveryBrief = (formData.get("standingDiscoveryBrief") as string) || null;
+  const autoRunDiscovery = formData.get("autoRunDiscovery") === "on";
+  const autoSelectDiscovered = formData.get("autoSelectDiscovered") === "on";
+  const autoProspectSelected = formData.get("autoProspectSelected") === "on";
 
   await prisma.settings.update({
     where: { id: settings.id },
@@ -27,17 +31,28 @@ export async function updateSettings(formData: FormData) {
       autoApproveFirstEmails,
       autoApproveFollowUps,
       emailSignature,
+      standingDiscoveryBrief,
+      autoRunDiscovery,
+      autoSelectDiscovered,
+      autoProspectSelected,
     },
   });
 
   revalidatePath("/settings");
   revalidatePath("/review");
+  revalidatePath("/drafting");
 }
 
-export async function toggleAutoApprove(
-  key: "autoApproveFirstEmails" | "autoApproveFollowUps",
-  value: boolean
-) {
+type BooleanSettingKey =
+  | "autoApproveFirstEmails"
+  | "autoApproveFollowUps"
+  | "autoDraftFirstEmails"
+  | "autoGenerateFollowUps"
+  | "autoRunDiscovery"
+  | "autoSelectDiscovered"
+  | "autoProspectSelected";
+
+export async function toggleAutoApprove(key: BooleanSettingKey, value: boolean) {
   const settings = await getSettings();
   await prisma.settings.update({
     where: { id: settings.id },
@@ -45,4 +60,5 @@ export async function toggleAutoApprove(
   });
   revalidatePath("/review");
   revalidatePath("/settings");
+  revalidatePath("/drafting");
 }

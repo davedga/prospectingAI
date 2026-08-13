@@ -9,15 +9,14 @@ type ContactWithEmail = {
   id: string;
   name: string;
   title: string;
+  companyName: string;
   email: DraftEmailBase | null;
 };
 
 export function DraftingBoard({
-  companyName,
   contacts,
   autoDraft,
 }: {
-  companyName: string;
   contacts: ContactWithEmail[];
   autoDraft: boolean;
 }) {
@@ -75,7 +74,7 @@ export function DraftingBoard({
         ...email,
         contactName: contact.name,
         contactTitle: contact.title,
-        companyName,
+        companyName: contact.companyName,
       };
     })
     .filter((e): e is DraftTableEmail => e !== null);
@@ -117,9 +116,7 @@ export function DraftingBoard({
             onClick={handleGenerateAll}
             disabled={isGeneratingAll}
           >
-            {isGeneratingAll
-              ? "Generating..."
-              : `Generate Drafts (${missingCount})`}
+            {isGeneratingAll ? "Drafting..." : `Draft All (${missingCount})`}
           </Button>
         )}
         {draftEmails.length > 0 && (
@@ -136,7 +133,7 @@ export function DraftingBoard({
               key={c.id}
               className="rounded-full border border-dashed border-neutral-300 px-3 py-1 text-xs text-neutral-500"
             >
-              Drafting for {c.name}...
+              Drafting for {c.name} ({c.companyName})...
             </span>
           ))}
           {queuedContacts.map((c) => (
@@ -144,18 +141,24 @@ export function DraftingBoard({
               key={c.id}
               className="rounded-full border border-dashed border-neutral-300 px-3 py-1 text-xs text-neutral-500"
             >
-              {autoDraft ? "Queued" : "Not drafted yet"}: {c.name}
+              {autoDraft ? "Queued" : "Not drafted yet"}: {c.name} ({c.companyName})
             </span>
           ))}
         </div>
       )}
 
-      <DraftTable
-        emails={readyEmails}
-        onChange={(updated) =>
-          setEmails((prev) => ({ ...prev, [updated.contactId]: updated }))
-        }
-      />
+      {contacts.length === 0 ? (
+        <p className="text-sm text-neutral-500">
+          Nothing waiting on a draft right now.
+        </p>
+      ) : (
+        <DraftTable
+          emails={readyEmails}
+          onChange={(updated) =>
+            setEmails((prev) => ({ ...prev, [updated.contactId]: updated }))
+          }
+        />
+      )}
     </div>
   );
 }

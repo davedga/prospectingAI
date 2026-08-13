@@ -6,21 +6,32 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { toggleAutoApprove } from "@/app/(dashboard)/settings/actions";
 
-export function AutoApproveToggle({
+type BooleanSettingKey =
+  | "autoApproveFirstEmails"
+  | "autoApproveFollowUps"
+  | "autoDraftFirstEmails"
+  | "autoGenerateFollowUps"
+  | "autoRunDiscovery"
+  | "autoSelectDiscovered"
+  | "autoProspectSelected";
+
+export function SettingToggle({
   settingKey,
   initialValue,
   id,
+  label = "Auto-approve",
 }: {
-  settingKey: "autoApproveFirstEmails" | "autoApproveFollowUps";
+  settingKey: BooleanSettingKey;
   initialValue: boolean;
   id: string;
+  label?: string;
 }) {
   const [isPending, startTransition] = useTransition();
 
   const handleChange = (checked: boolean) => {
     startTransition(async () => {
       await toggleAutoApprove(settingKey, checked);
-      toast.success(checked ? "Auto-approve turned on." : "Auto-approve turned off.");
+      toast.success(checked ? `${label} turned on.` : `${label} turned off.`);
     });
   };
 
@@ -33,8 +44,11 @@ export function AutoApproveToggle({
         onCheckedChange={handleChange}
       />
       <Label htmlFor={id} className="text-xs font-normal text-neutral-500">
-        Auto-approve
+        {label}
       </Label>
     </div>
   );
 }
+
+// Back-compat alias — same component, original name.
+export { SettingToggle as AutoApproveToggle };

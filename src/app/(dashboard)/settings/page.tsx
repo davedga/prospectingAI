@@ -20,15 +20,109 @@ export default async function SettingsPage() {
       </div>
 
       <form action={updateSettings} className="space-y-6">
+        <Card className="border-amber-300 bg-amber-50/50">
+          <CardHeader>
+            <CardTitle className="text-sm font-semibold">
+              Full autonomous mode — Discovery &amp; Prospecting
+            </CardTitle>
+            <p className="text-xs text-neutral-600">
+              Off by default. Turning these on lets the app source new
+              companies and buying-committee contacts entirely on its own,
+              with no brief typed in and no manual review — combined with
+              the automation toggles below, this can take a brand from
+              &quot;never seen before&quot; to &quot;emailed&quot; with zero
+              clicks. It spends real Anthropic/Apollo credits and, if
+              auto-approve is also on, sends real email to real people.
+              Reply detection isn&apos;t wired up for Gmail yet, so the
+              &quot;stop at first reply&quot; part only works up to sending
+              — replies won&apos;t auto-cancel follow-ups until that&apos;s
+              built separately.
+            </p>
+          </CardHeader>
+          <CardContent className="max-w-lg space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="standingDiscoveryBrief">
+                Standing discovery brief
+              </Label>
+              <Textarea
+                id="standingDiscoveryBrief"
+                name="standingDiscoveryBrief"
+                rows={3}
+                placeholder='e.g. "beauty and jewelry DTC brands, $3-30M revenue, US, not already scaled on TikTok Shop"'
+                defaultValue={settings.standingDiscoveryBrief ?? ""}
+              />
+              <p className="text-xs text-neutral-500">
+                Used in place of a typed brief when Discovery runs on its
+                own. Leave blank and auto-discovery simply won&apos;t run,
+                even if the toggle below is on.
+              </p>
+            </div>
+            <div className="flex items-start gap-2">
+              <Checkbox
+                id="autoRunDiscovery"
+                name="autoRunDiscovery"
+                defaultChecked={settings.autoRunDiscovery}
+                className="mt-0.5"
+              />
+              <div>
+                <Label htmlFor="autoRunDiscovery" className="font-normal">
+                  Auto-run Discovery daily using the standing brief
+                </Label>
+                <p className="text-xs text-neutral-500">
+                  Runs in the same daily cron as follow-ups. Candidates
+                  still land as &quot;proposed&quot; for your review unless
+                  auto-select is also on.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start gap-2">
+              <Checkbox
+                id="autoSelectDiscovered"
+                name="autoSelectDiscovered"
+                defaultChecked={settings.autoSelectDiscovered}
+                className="mt-0.5"
+              />
+              <div>
+                <Label htmlFor="autoSelectDiscovered" className="font-normal">
+                  Auto-select newly discovered companies (skip Discovery review)
+                </Label>
+                <p className="text-xs text-neutral-500">
+                  Non-excluded candidates go straight to &quot;selected&quot;
+                  instead of waiting on the Discovery page for you to pick.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start gap-2">
+              <Checkbox
+                id="autoProspectSelected"
+                name="autoProspectSelected"
+                defaultChecked={settings.autoProspectSelected}
+                className="mt-0.5"
+              />
+              <div>
+                <Label htmlFor="autoProspectSelected" className="font-normal">
+                  Auto-prospect selected companies (skip the Prospecting queue)
+                </Label>
+                <p className="text-xs text-neutral-500">
+                  Runs Apollo lookup + contact selection automatically for
+                  anything sitting in &quot;selected,&quot; whether it got
+                  there via Discovery review or auto-select above.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle className="text-sm font-semibold">
               Automation — per pipeline step
             </CardTitle>
             <p className="text-xs text-neutral-500">
-              Discovery and Prospecting are always manual — there&apos;s no
-              scheduled trigger for either, you run them on demand. These
-              toggles control the steps that can otherwise run without you.
+              These control drafting, approval, and sending — the steps
+              after a company has contacts. Combined with the autonomous
+              mode above, this is what lets the whole pipeline run without
+              you end to end.
             </p>
           </CardHeader>
           <CardContent className="max-w-lg space-y-4">

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { generateFollowUpContent } from "@/lib/followup-content";
 import { sendEmailAndAdvanceSequence } from "@/lib/send-email";
 import { getSettings } from "@/lib/settings";
+import { runAutomatedPipeline } from "@/lib/auto-pipeline";
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
@@ -10,10 +11,20 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
+  // Runs the earlier pipeline stages (self-directed discovery, auto-select,
+  // auto-prospect, auto-draft + auto-send first emails) ahead of the
+  // follow-up pass below. Every stage is independently gated by its own
+  // Settings toggle and no-ops if that toggle is off.
+  const pipelineSummary = await runAutomatedPipeline().catch((error) => {
+    console.error("Automated pipeline run failed", error);
+    return null;
+  });
+
   const settings = await getSettings();
 
   if (!settings.autoGenerateFollowUps) {
     return NextResponse.json({
+      pipeline: pipelineSummary,
       processed: 0,
       results: [],
       skipped: "autoGenerateFollowUps is off — follow-ups must be drafted manually.",
@@ -61,5 +72,5 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({ processed: results.length, results });
+  return NextResponse.json({ pipeline: pipelineSummary, processed: results.length, results });
 }

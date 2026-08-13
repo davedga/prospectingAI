@@ -36,6 +36,7 @@ export default async function CompanyDraftingPage({
     id: c.id,
     name: c.name,
     title: c.title,
+    companyName: company.name,
     email: c.emails[0]
       ? {
           id: c.emails[0].id,
@@ -72,7 +73,6 @@ export default async function CompanyDraftingPage({
         </p>
       ) : (
         <DraftingBoard
-          companyName={company.name}
           contacts={contacts}
           autoDraft={settings.autoDraftFirstEmails}
         />
