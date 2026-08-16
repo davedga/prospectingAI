@@ -5,8 +5,12 @@ import { getSettings } from "@/lib/settings";
 import { runAutomatedPipeline, type AutoPipelineSummary } from "@/lib/auto-pipeline";
 import { getFollowUpsSentTodayCount } from "@/lib/daily-limits";
 import { isWithinSendWindow } from "@/lib/send-window";
+import { createDeadline } from "@/lib/time-budget";
 
 const FOLLOWUP_CONCURRENCY = 5;
+// Vercel Hobby's maxDuration ceiling is 60s; leave buffer for the request/
+// response overhead and Prisma connection teardown.
+const CYCLE_BUDGET_MS = 50_000;
 
 export type FollowUpResult = {
   emailId: string;
@@ -28,7 +32,13 @@ export type AutomationCycleResult = {
 export async function runAutomationCycle(
   approvedBy = "auto (cron)"
 ): Promise<AutomationCycleResult> {
-  const pipelineSummary = await runAutomatedPipeline().catch((error) => {
+  // One shared wall-clock budget across the pipeline stages AND the
+  // follow-up loop below, so a slow discovery retry doesn't starve
+  // everything after it — each stage bails cleanly once time is up
+  // instead of risking a hard kill mid-write.
+  const deadline = createDeadline(CYCLE_BUDGET_MS);
+
+  const pipelineSummary = await runAutomatedPipeline(deadline).catch((error) => {
     console.error("Automated pipeline run failed", error);
     return null;
   });
@@ -60,6 +70,7 @@ export async function runAutomationCycle(
   const withinWindow = isWithinSendWindow(settings);
 
   for (let i = 0; i < dueFollowUps.length; i += FOLLOWUP_CONCURRENCY) {
+    if (deadline.expired()) break; // remaining follow-ups wait for the next run
     const chunk = dueFollowUps.slice(i, i + FOLLOWUP_CONCURRENCY);
     await Promise.all(
       chunk.map(async (pending) => {

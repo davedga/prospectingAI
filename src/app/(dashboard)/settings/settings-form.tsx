@@ -272,18 +272,24 @@ export function SettingsForm({ settings }: { settings: SettingsData }) {
             Only gate automated sends/discovery/prospecting (the cron and
             the autonomous-mode toggles above) — manual actions you
             trigger yourself in the UI are never blocked by these.
-            Vercel&apos;s free Hobby plan only fires the daily cron once,
-            so the window mostly decides whether that one run is allowed
-            to send at all — if it lands outside the window, sends wait
-            for tomorrow&apos;s run. Each run batches drafts/sends
-            concurrently and uses the full 60s Hobby allows, but at real
-            volume (50+ first emails/day) one run may still not finish
-            everything. For guaranteed daily volume, point a free external
-            scheduler (e.g. cron-job.org) at{" "}
-            <code className="text-xs">/api/cron/send-followups</code>{" "}
-            hourly with header{" "}
-            <code className="text-xs">Authorization: Bearer &lt;CRON_SECRET&gt;</code>
-            , or upgrade to Vercel Pro for more frequent/longer cron runs.
+            Vercel&apos;s free Hobby plan caps each run at 60 seconds, which
+            isn&apos;t enough to hit real daily volume (15+ brands, 50-60+
+            first emails) in one shot — so each run now does a bounded
+            slice of work (time-boxed per stage) and stops cleanly instead
+            of getting killed mid-write.{" "}
+            <strong>
+              To actually hit your daily targets, set up a free external
+              scheduler
+            </strong>{" "}
+            (e.g. cron-job.org) hitting{" "}
+            <code className="text-xs">/api/cron/send-followups</code> every
+            5-10 minutes with header{" "}
+            <code className="text-xs">Authorization: Bearer &lt;CRON_SECRET&gt;</code>{" "}
+            — the daily total accumulates across many short runs. The
+            built-in Vercel cron alone (once/day) will only make one slice
+            of progress. Upgrading to Vercel Pro removes the 60s ceiling
+            almost entirely if you&apos;d rather not run an external
+            scheduler.
           </p>
         </CardHeader>
         <CardContent className="max-w-md space-y-5">

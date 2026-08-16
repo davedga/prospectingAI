@@ -13,9 +13,11 @@ import {
   getFirstEmailsSentTodayCount,
 } from "@/lib/daily-limits";
 import { isWithinSendWindow } from "@/lib/send-window";
+import { createDeadline, type Deadline } from "@/lib/time-budget";
 
 const DRAFT_SEND_CONCURRENCY = 5;
 const BRIEF_AUTO_TUNE_COOLDOWN_MS = 20 * 60 * 60 * 1000; // ~20h, roughly once/day
+const DEFAULT_PIPELINE_BUDGET_MS = 40_000;
 
 export type AutoPipelineSummary = {
   discoveryRunId: string | null;
@@ -35,12 +37,20 @@ export type AutoPipelineSummary = {
   sendErrors: number;
   sendSkippedOutsideWindow: number;
   sendSkippedLimitReached: number;
+  timeBudgetExhausted: boolean;
 };
 
 // These three stages are the only ones that run unattended, so daily
 // limits and the send window only gate them — manual actions in the UI
-// are already throttled by a human clicking things.
-export async function runAutomatedPipeline(): Promise<AutoPipelineSummary> {
+// are already throttled by a human clicking things. Each stage also
+// checks the shared wall-clock deadline before starting new work, so a
+// slow stage (e.g. Discovery retrying) leaves time for the others instead
+// of consuming the whole invocation — over many frequent runs (daily
+// cron, or an external scheduler hitting the endpoint every few minutes)
+// the work still adds up to the daily targets.
+export async function runAutomatedPipeline(
+  deadline: Deadline = createDeadline(DEFAULT_PIPELINE_BUDGET_MS)
+): Promise<AutoPipelineSummary> {
   const settings = await getSettings();
 
   const summary: AutoPipelineSummary = {
@@ -61,70 +71,79 @@ export async function runAutomatedPipeline(): Promise<AutoPipelineSummary> {
     sendErrors: 0,
     sendSkippedOutsideWindow: 0,
     sendSkippedLimitReached: 0,
+    timeBudgetExhausted: false,
   };
 
   // 1. Self-directed discovery, using the standing brief instead of an
   // admin-typed prompt. Capped at the remaining daily discovery budget.
   if (settings.autoRunDiscovery && settings.standingDiscoveryBrief?.trim()) {
-    const discoveredToday = await getDiscoveredTodayCount(settings.sendTimezone);
-    const remaining = settings.dailyDiscoveryLimit - discoveredToday;
-
-    if (remaining <= 0) {
-      summary.discoverySkippedLimitReached = true;
+    if (deadline.expired()) {
+      summary.timeBudgetExhausted = true;
     } else {
-      const standingBrief = settings.standingDiscoveryBrief.trim();
-      try {
-        const { discoveryRunId, companyIds, usableCount, attempts, shortfall } =
-          await runDiscoveryBatch(standingBrief, settings.autoSelectDiscovered, {
-            maxCompanies: remaining,
-            minCompanies: settings.minDiscoveryPerRun,
-          });
-        summary.discoveryRunId = discoveryRunId;
-        summary.discoveredCompanies = companyIds.length;
-        summary.discoveryUsableCompanies = usableCount;
-        summary.discoveryAttempts = attempts;
-        summary.discoveryShortfall = shortfall;
+      const discoveredToday = await getDiscoveredTodayCount(settings.sendTimezone);
+      const remaining = settings.dailyDiscoveryLimit - discoveredToday;
 
-        if (shortfall) {
-          console.warn(
-            `Discovery fell short of minDiscoveryPerRun (${settings.minDiscoveryPerRun}): only ${usableCount} usable candidates after ${attempts} attempt(s).`
-          );
+      if (remaining <= 0) {
+        summary.discoverySkippedLimitReached = true;
+      } else {
+        const standingBrief = settings.standingDiscoveryBrief.trim();
+        try {
+          const { discoveryRunId, companyIds, usableCount, attempts, shortfall } =
+            await runDiscoveryBatch(standingBrief, settings.autoSelectDiscovered, {
+              maxCompanies: remaining,
+              minCompanies: settings.minDiscoveryPerRun,
+              deadline,
+            });
+          summary.discoveryRunId = discoveryRunId;
+          summary.discoveredCompanies = companyIds.length;
+          summary.discoveryUsableCompanies = usableCount;
+          summary.discoveryAttempts = attempts;
+          summary.discoveryShortfall = shortfall;
 
-          // Persist a broadened brief so tomorrow's run doesn't hit the same
-          // wall — capped to roughly once/day so it doesn't drift on every
-          // single run if an external scheduler is triggering hourly.
-          const cooledDown =
-            !settings.standingBriefAutoTunedAt ||
-            Date.now() - settings.standingBriefAutoTunedAt.getTime() > BRIEF_AUTO_TUNE_COOLDOWN_MS;
+          if (shortfall) {
+            console.warn(
+              `Discovery fell short of minDiscoveryPerRun (${settings.minDiscoveryPerRun}): only ${usableCount} usable candidates after ${attempts} attempt(s).`
+            );
 
-          if (cooledDown) {
-            try {
-              const excludedSample = await getExcludedBrandSample(25);
-              const { brief: newBrief, changeSummary } = await proposeBroadenedBrief({
-                currentBrief: standingBrief,
-                excludedSample,
-                usableCount,
-                targetCount: settings.minDiscoveryPerRun,
-              });
-              await prisma.settings.update({
-                where: { id: settings.id },
-                data: { standingDiscoveryBrief: newBrief, standingBriefAutoTunedAt: new Date() },
-              });
-              await prisma.feedback.create({
-                data: {
-                  scope: "discovery",
-                  note: `Auto-broadened standing brief after a shortfall (${usableCount}/${settings.minDiscoveryPerRun} usable candidates): ${changeSummary}`,
-                },
-              });
-              summary.discoveryBriefAutoTuned = true;
-              summary.discoveryBriefChangeSummary = changeSummary;
-            } catch (error) {
-              console.error("Failed to auto-tune standing discovery brief", error);
+            // Persist a broadened brief so the next run doesn't hit the same
+            // wall — capped to roughly once/day so it doesn't drift on every
+            // single run if an external scheduler is triggering frequently.
+            // Skipped if we're already out of time budget this invocation;
+            // it'll get picked up on a future run instead.
+            const cooledDown =
+              !settings.standingBriefAutoTunedAt ||
+              Date.now() - settings.standingBriefAutoTunedAt.getTime() >
+                BRIEF_AUTO_TUNE_COOLDOWN_MS;
+
+            if (cooledDown && !deadline.expired()) {
+              try {
+                const excludedSample = await getExcludedBrandSample(25);
+                const { brief: newBrief, changeSummary } = await proposeBroadenedBrief({
+                  currentBrief: standingBrief,
+                  excludedSample,
+                  usableCount,
+                  targetCount: settings.minDiscoveryPerRun,
+                });
+                await prisma.settings.update({
+                  where: { id: settings.id },
+                  data: { standingDiscoveryBrief: newBrief, standingBriefAutoTunedAt: new Date() },
+                });
+                await prisma.feedback.create({
+                  data: {
+                    scope: "discovery",
+                    note: `Auto-broadened standing brief after a shortfall (${usableCount}/${settings.minDiscoveryPerRun} usable candidates): ${changeSummary}`,
+                  },
+                });
+                summary.discoveryBriefAutoTuned = true;
+                summary.discoveryBriefChangeSummary = changeSummary;
+              } catch (error) {
+                console.error("Failed to auto-tune standing discovery brief", error);
+              }
             }
           }
+        } catch (error) {
+          console.error("Automated discovery failed", error);
         }
-      } catch (error) {
-        console.error("Automated discovery failed", error);
       }
     }
   }
@@ -148,6 +167,10 @@ export async function runAutomatedPipeline(): Promise<AutoPipelineSummary> {
       for (const company of toProspect) {
         if (remaining <= 0) {
           summary.prospectingSkippedLimitReached = true;
+          break;
+        }
+        if (deadline.expired()) {
+          summary.timeBudgetExhausted = true;
           break;
         }
         try {
@@ -180,6 +203,10 @@ export async function runAutomatedPipeline(): Promise<AutoPipelineSummary> {
     });
 
     for (let i = 0; i < needsDraft.length; i += DRAFT_SEND_CONCURRENCY) {
+      if (deadline.expired()) {
+        summary.timeBudgetExhausted = true;
+        break;
+      }
       const chunk = needsDraft.slice(i, i + DRAFT_SEND_CONCURRENCY);
       await Promise.all(
         chunk.map(async (contact) => {

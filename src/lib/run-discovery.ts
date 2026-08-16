@@ -1,14 +1,23 @@
 import { prisma } from "@/lib/prisma";
 import { generateDiscoveryBatch } from "@/lib/discovery";
-import { checkExclusion, getExcludedBrandSample } from "@/lib/exclusions";
+import { getExcludedBrandSample } from "@/lib/exclusions";
+import { createDeadline, type Deadline } from "@/lib/time-budget";
 
 export type RunDiscoveryBatchOptions = {
   // Hard cap — never create more than this many companies this run.
   maxCompanies?: number;
   // Soft target — keep retrying (with an auto-broadened brief) until at
-  // least this many non-excluded companies exist, or maxAttempts is hit.
+  // least this many non-excluded companies exist, or maxAttempts/deadline
+  // is hit.
   minCompanies?: number;
   maxAttempts?: number;
+  // Wall-clock budget for the whole call (all attempts combined). Always
+  // completes attempt 1; skips further retries once expired instead of
+  // risking a hard kill mid-write. Defaults to a generous 45s for
+  // standalone callers (e.g. the manual Discovery UI) — the automated
+  // pipeline passes its own shared deadline so multiple stages can share
+  // one wall-clock budget.
+  deadline?: Deadline;
 };
 
 // On retries, don't just re-ask the identical question and hope for
@@ -29,6 +38,24 @@ function broadenBrief(brief: string, attempt: number, excludedSample: string[]):
 This is retry attempt ${attempt} for this batch — the prior attempt(s) didn't surface enough new, non-excluded candidates. Broaden the search for this batch: shift toward adjacent brand categories (e.g. beauty could become food & bev, or sports & fitness), extend the revenue range (e.g. a $3M floor could become $5M), and consider brands at different stages of their TikTok Shop journey (not yet on it, or on it but still underscaled) — not just brands that match the original brief narrowly. The goal is a steady supply of viable brands for Dallas Global Agency to onboard and scale on TikTok Shop, so prioritize volume of qualified candidates this round over narrow precision.${reference}`;
 }
 
+// In-memory version of exclusions.ts's checkExclusion — avoids a fresh
+// full-table query (6.5k+ rows) per candidate when we've already loaded
+// the list once for this batch.
+function matchExclusion(
+  name: string,
+  excludedBrands: { name: string }[]
+): { isExcluded: boolean; matchedName?: string } {
+  const normalized = name.trim().toLowerCase();
+  if (!normalized) return { isExcluded: false };
+  for (const brand of excludedBrands) {
+    const brandNormalized = brand.name.trim().toLowerCase();
+    if (normalized.includes(brandNormalized) || brandNormalized.includes(normalized)) {
+      return { isExcluded: true, matchedName: brand.name };
+    }
+  }
+  return { isExcluded: false };
+}
+
 export async function runDiscoveryBatch(
   brief: string,
   autoSelect: boolean,
@@ -36,7 +63,8 @@ export async function runDiscoveryBatch(
 ) {
   const maxCompanies = options?.maxCompanies;
   const minCompanies = options?.minCompanies ?? 0;
-  const maxAttempts = Math.max(1, options?.maxAttempts ?? (minCompanies > 0 ? 5 : 1));
+  const maxAttempts = Math.max(1, options?.maxAttempts ?? (minCompanies > 0 ? 3 : 1));
+  const deadline = options?.deadline ?? createDeadline(45_000);
 
   const [excludedBrands, feedback] = await Promise.all([
     prisma.excludedBrand.findMany({ select: { name: true } }),
@@ -62,6 +90,9 @@ export async function runDiscoveryBatch(
   let lastBriefUsed = brief;
 
   while (attempts < maxAttempts) {
+    // Always run at least one attempt; skip further retries once the
+    // shared wall-clock budget is gone rather than risking a hard kill.
+    if (attempts > 0 && deadline.expired()) break;
     attempts += 1;
     lastBriefUsed = broadenBrief(brief, attempts, excludedSample);
 
@@ -82,7 +113,7 @@ export async function runDiscoveryBatch(
 
     for (const candidate of batch) {
       seenNames.add(candidate.name.toLowerCase());
-      const exclusion = await checkExclusion(candidate.name);
+      const exclusion = matchExclusion(candidate.name, excludedBrands);
 
       const company = await prisma.company.create({
         data: {
