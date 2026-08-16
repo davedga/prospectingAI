@@ -121,23 +121,37 @@ auto-send). Manual actions taken in the UI are never blocked by these.
   via the Gmail API within this local-time window. Vercel's free Hobby plan
   only fires the daily cron once, so in practice this mostly decides whether
   that single run is allowed to send at all; if it lands outside the window,
-  drafted/approved emails wait for the next run. For real intra-day spread,
-  either upgrade to Vercel Pro (more frequent cron) or point a free external
-  scheduler (e.g. cron-job.org) at `/api/cron/send-followups` hourly with
-  the `Authorization: Bearer <CRON_SECRET>` header.
+  drafted/approved emails wait for the next run.
 - **Daily limits** (`dailyDiscoveryLimit`/`dailyProspectLimit`/
-  `dailyEmailLimit`, checked in `src/lib/daily-limits.ts`) — caps brands
-  auto-discovered, POCs auto-prospected, and emails auto-sent per calendar
-  day in `sendTimezone`. Enforced inside `src/lib/auto-pipeline.ts` and the
-  cron's follow-up loop.
+  `dailyFirstEmailLimit`/`dailyFollowUpLimit`, checked in
+  `src/lib/daily-limits.ts`) — caps brands auto-discovered, POCs
+  auto-prospected, first emails auto-sent, and follow-ups auto-sent per
+  calendar day in `sendTimezone`. First emails and follow-ups have separate
+  budgets so a busy follow-up day can't crowd out new outreach volume.
+  Enforced inside `src/lib/auto-pipeline.ts` and
+  `src/lib/run-automation-cycle.ts`, both of which process their queues in
+  small concurrent batches (5 at a time) and the cron/Settings-save routes
+  both set `maxDuration = 60` (the Hobby ceiling) to fit as much as
+  possible into one invocation. At real volume (50+ first emails/day) one
+  daily run may still not finish everything — for guaranteed volume, point
+  a free external scheduler (e.g. cron-job.org) at
+  `/api/cron/send-followups` hourly with an
+  `Authorization: Bearer <CRON_SECRET>` header, or upgrade to Vercel Pro
+  for more frequent/longer cron runs.
 - **Minimum discovery per run** (`minDiscoveryPerRun`, in
   `src/lib/run-discovery.ts`) — a soft target under the daily max above. If
   Claude's first batch comes up short of non-excluded candidates, Discovery
   automatically retries (up to 5 attempts) with an auto-broadened brief
-  (wider categories/revenue range/TTS-maturity) instead of just accepting a
-  thin batch — the goal is a steady supply of brands to onboard and scale
-  on TikTok Shop, not a single narrow pass. If it still falls short after
-  retrying, the shortfall is logged rather than looping forever.
+  (wider categories/revenue range/TTS-maturity), using a random sample of
+  already-excluded brands as "similar profile, not these exact companies"
+  reference material via `getExcludedBrandSample()`. If it's still short
+  after retrying, `src/lib/discovery.ts`'s `proposeBroadenedBrief()` gets
+  called once to permanently rewrite `standingDiscoveryBrief` itself (e.g.
+  beauty → beauty + food & bev, a $3M revenue floor → $5M) so tomorrow's
+  run starts from a wider net — capped to roughly once/day via
+  `standingBriefAutoTunedAt` so it doesn't drift on every single run if an
+  external scheduler is triggering hourly. Each auto-tune is logged as a
+  `Feedback` row (scope `discovery`) for an audit trail.
 - **A/B testing** (`abTestingEnabled`/`abVariantAHint`/`abVariantBHint`) —
   when on, each contact is randomly assigned variant A or B the first time
   a first-touch email is drafted for them (`Contact.variant`), reused for

@@ -145,8 +145,10 @@ model Settings {
   sendTimezone           String   @default("America/New_York")
   dailyDiscoveryLimit    Int      @default(20)
   dailyProspectLimit     Int      @default(20)
-  dailyEmailLimit        Int      @default(30)
+  dailyFirstEmailLimit   Int      @default(55)
+  dailyFollowUpLimit     Int      @default(30)
   minDiscoveryPerRun     Int      @default(5)
+  standingBriefAutoTunedAt DateTime?
   abTestingEnabled       Boolean  @default(false)
   abVariantAHint         String?  @db.Text
   abVariantBHint         String?  @db.Text

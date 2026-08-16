@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { getSettings } from "@/lib/settings";
 import { runDiscoveryBatch } from "@/lib/run-discovery";
+import { proposeBroadenedBrief } from "@/lib/discovery";
+import { getExcludedBrandSample } from "@/lib/exclusions";
 import { prospectCompany } from "@/lib/prospecting";
 import { autoSelectQualifyingContacts } from "@/lib/contact-selection";
 import { draftFirstEmail } from "@/lib/drafting";
@@ -8,9 +10,12 @@ import { sendEmailAndAdvanceSequence } from "@/lib/send-email";
 import {
   getDiscoveredTodayCount,
   getProspectedTodayCount,
-  getSentTodayCount,
+  getFirstEmailsSentTodayCount,
 } from "@/lib/daily-limits";
 import { isWithinSendWindow } from "@/lib/send-window";
+
+const DRAFT_SEND_CONCURRENCY = 5;
+const BRIEF_AUTO_TUNE_COOLDOWN_MS = 20 * 60 * 60 * 1000; // ~20h, roughly once/day
 
 export type AutoPipelineSummary = {
   discoveryRunId: string | null;
@@ -19,6 +24,8 @@ export type AutoPipelineSummary = {
   discoveryAttempts: number;
   discoveryShortfall: boolean;
   discoverySkippedLimitReached: boolean;
+  discoveryBriefAutoTuned: boolean;
+  discoveryBriefChangeSummary: string | null;
   prospectedCompanies: number;
   prospectingErrors: number;
   prospectingSkippedLimitReached: boolean;
@@ -43,6 +50,8 @@ export async function runAutomatedPipeline(): Promise<AutoPipelineSummary> {
     discoveryAttempts: 0,
     discoveryShortfall: false,
     discoverySkippedLimitReached: false,
+    discoveryBriefAutoTuned: false,
+    discoveryBriefChangeSummary: null,
     prospectedCompanies: 0,
     prospectingErrors: 0,
     prospectingSkippedLimitReached: false,
@@ -63,9 +72,10 @@ export async function runAutomatedPipeline(): Promise<AutoPipelineSummary> {
     if (remaining <= 0) {
       summary.discoverySkippedLimitReached = true;
     } else {
+      const standingBrief = settings.standingDiscoveryBrief.trim();
       try {
         const { discoveryRunId, companyIds, usableCount, attempts, shortfall } =
-          await runDiscoveryBatch(settings.standingDiscoveryBrief.trim(), settings.autoSelectDiscovered, {
+          await runDiscoveryBatch(standingBrief, settings.autoSelectDiscovered, {
             maxCompanies: remaining,
             minCompanies: settings.minDiscoveryPerRun,
           });
@@ -74,10 +84,44 @@ export async function runAutomatedPipeline(): Promise<AutoPipelineSummary> {
         summary.discoveryUsableCompanies = usableCount;
         summary.discoveryAttempts = attempts;
         summary.discoveryShortfall = shortfall;
+
         if (shortfall) {
           console.warn(
             `Discovery fell short of minDiscoveryPerRun (${settings.minDiscoveryPerRun}): only ${usableCount} usable candidates after ${attempts} attempt(s).`
           );
+
+          // Persist a broadened brief so tomorrow's run doesn't hit the same
+          // wall — capped to roughly once/day so it doesn't drift on every
+          // single run if an external scheduler is triggering hourly.
+          const cooledDown =
+            !settings.standingBriefAutoTunedAt ||
+            Date.now() - settings.standingBriefAutoTunedAt.getTime() > BRIEF_AUTO_TUNE_COOLDOWN_MS;
+
+          if (cooledDown) {
+            try {
+              const excludedSample = await getExcludedBrandSample(25);
+              const { brief: newBrief, changeSummary } = await proposeBroadenedBrief({
+                currentBrief: standingBrief,
+                excludedSample,
+                usableCount,
+                targetCount: settings.minDiscoveryPerRun,
+              });
+              await prisma.settings.update({
+                where: { id: settings.id },
+                data: { standingDiscoveryBrief: newBrief, standingBriefAutoTunedAt: new Date() },
+              });
+              await prisma.feedback.create({
+                data: {
+                  scope: "discovery",
+                  note: `Auto-broadened standing brief after a shortfall (${usableCount}/${settings.minDiscoveryPerRun} usable candidates): ${changeSummary}`,
+                },
+              });
+              summary.discoveryBriefAutoTuned = true;
+              summary.discoveryBriefChangeSummary = changeSummary;
+            } catch (error) {
+              console.error("Failed to auto-tune standing discovery brief", error);
+            }
+          }
         }
       } catch (error) {
         console.error("Automated discovery failed", error);
@@ -122,10 +166,12 @@ export async function runAutomatedPipeline(): Promise<AutoPipelineSummary> {
   // 3. Auto-draft first emails for selected contacts that don't have one
   // yet, and auto-send immediately if auto-approve resulted in "approved"
   // — but only within the configured send window, and capped at the
-  // remaining daily email budget.
+  // remaining daily first-email budget. Processed in small concurrent
+  // batches (each draft+send is a couple of network round-trips) so more
+  // fits inside a single serverless invocation.
   if (settings.autoDraftFirstEmails) {
-    const sentToday = await getSentTodayCount(settings.sendTimezone);
-    let remainingSends = settings.dailyEmailLimit - sentToday;
+    const sentToday = await getFirstEmailsSentTodayCount(settings.sendTimezone);
+    let remainingSends = settings.dailyFirstEmailLimit - sentToday;
     const withinWindow = isWithinSendWindow(settings);
 
     const needsDraft = await prisma.contact.findMany({
@@ -133,30 +179,40 @@ export async function runAutomatedPipeline(): Promise<AutoPipelineSummary> {
       include: { company: true },
     });
 
-    for (const contact of needsDraft) {
-      try {
-        const email = await draftFirstEmail(contact.id, undefined, true);
-        summary.draftedFirstEmails += 1;
+    for (let i = 0; i < needsDraft.length; i += DRAFT_SEND_CONCURRENCY) {
+      const chunk = needsDraft.slice(i, i + DRAFT_SEND_CONCURRENCY);
+      await Promise.all(
+        chunk.map(async (contact) => {
+          try {
+            const email = await draftFirstEmail(contact.id, undefined, true);
+            summary.draftedFirstEmails += 1;
 
-        if (email.status === "approved") {
-          if (!withinWindow) {
-            summary.sendSkippedOutsideWindow += 1;
-          } else if (remainingSends <= 0) {
-            summary.sendSkippedLimitReached += 1;
-          } else {
+            if (email.status !== "approved") return;
+
+            if (!withinWindow) {
+              summary.sendSkippedOutsideWindow += 1;
+              return;
+            }
+            if (remainingSends <= 0) {
+              summary.sendSkippedLimitReached += 1;
+              return;
+            }
+            // Reserve budget synchronously (no await between check and
+            // decrement) so concurrent sends in this batch can't overshoot.
+            remainingSends -= 1;
+
             const result = await sendEmailAndAdvanceSequence({ ...email, contact });
             if (result.ok) {
               summary.sentFromAutoApproval += 1;
-              remainingSends -= 1;
             } else {
               summary.sendErrors += 1;
             }
+          } catch (error) {
+            console.error(`Automated drafting failed for contact ${contact.id}`, error);
+            summary.draftingErrors += 1;
           }
-        }
-      } catch (error) {
-        console.error(`Automated drafting failed for contact ${contact.id}`, error);
-        summary.draftingErrors += 1;
-      }
+        })
+      );
     }
   }
 

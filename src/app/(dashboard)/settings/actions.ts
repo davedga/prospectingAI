@@ -60,7 +60,8 @@ export async function updateSettings(
     const sendTimezone = (formData.get("sendTimezone") as string) || "America/New_York";
     const dailyDiscoveryLimit = Number(formData.get("dailyDiscoveryLimit"));
     const dailyProspectLimit = Number(formData.get("dailyProspectLimit"));
-    const dailyEmailLimit = Number(formData.get("dailyEmailLimit"));
+    const dailyFirstEmailLimit = Number(formData.get("dailyFirstEmailLimit"));
+    const dailyFollowUpLimit = Number(formData.get("dailyFollowUpLimit"));
     const minDiscoveryPerRun = Number(formData.get("minDiscoveryPerRun"));
     const abTestingEnabled = formData.get("abTestingEnabled") === "on";
     const abVariantAHint = (formData.get("abVariantAHint") as string) || null;
@@ -87,7 +88,8 @@ export async function updateSettings(
         sendTimezone,
         dailyDiscoveryLimit,
         dailyProspectLimit,
-        dailyEmailLimit,
+        dailyFirstEmailLimit,
+        dailyFollowUpLimit,
         minDiscoveryPerRun,
         abTestingEnabled,
         abVariantAHint,

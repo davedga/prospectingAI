@@ -148,3 +148,66 @@ Call the propose_companies tool with your results. Do not fabricate data — if 
   const input = toolUse.input as { companies: CandidateCompany[] };
   return input.companies;
 }
+
+const PROPOSE_BROADENED_BRIEF_TOOL = {
+  name: "propose_broadened_brief",
+  description:
+    "Rewrite a standing discovery brief to be moderately broader so future batches surface more viable candidates.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      brief: {
+        type: "string",
+        description: "The full rewritten standing brief — not a diff, the complete replacement text.",
+      },
+      changeSummary: {
+        type: "string",
+        description: "One sentence summarizing what changed (e.g. \"expanded from beauty-only to beauty + food & bev, revenue floor $3M -> $5M\").",
+      },
+    },
+    required: ["brief", "changeSummary"],
+  },
+};
+
+// Called when Discovery keeps coming up short on a brief even after
+// in-run retries — proposes a persisted, permanently-broadened version of
+// the standing brief so future daily runs start from a wider net instead
+// of hitting the same wall every time.
+export async function proposeBroadenedBrief({
+  currentBrief,
+  excludedSample,
+  usableCount,
+  targetCount,
+}: {
+  currentBrief: string;
+  excludedSample: string[];
+  usableCount: number;
+  targetCount: number;
+}): Promise<{ brief: string; changeSummary: string }> {
+  const systemPrompt = `You are tuning a standing brand-discovery brief for Dallas Global Agency's TikTok Shop prospecting pipeline. This brief is used daily to find new brands to onboard and scale on TikTok Shop.
+
+The current brief keeps producing too few new, viable candidates (only ${usableCount} of a target ${targetCount} in the most recent run). Rewrite it to be moderately broader — shift toward adjacent categories, extend the revenue range, or relax TikTok Shop maturity requirements — similar in spirit to how "beauty" might become "beauty or food & bev", or a revenue floor of $3M might become $5M. Don't discard the original intent entirely, just widen it enough to unblock volume.
+
+${excludedSample.length > 0 ? `For reference, here are brand profiles the agency has already worked with or excluded (do NOT reference these exact companies by name in the rewritten brief — they're just examples of the kind of brand profile that's relevant): ${excludedSample.join(", ")}.` : ""}
+
+Call the propose_broadened_brief tool with the full rewritten brief text and a one-line summary of what changed.`;
+
+  const message = await anthropic.messages.create({
+    model: CLAUDE_MODEL,
+    max_tokens: 1000,
+    system: systemPrompt,
+    tools: [PROPOSE_BROADENED_BRIEF_TOOL],
+    tool_choice: { type: "tool", name: "propose_broadened_brief" },
+    messages: [{ role: "user", content: `Current brief: ${currentBrief}` }],
+  });
+
+  const toolUse = message.content.find(
+    (block): block is Anthropic.ToolUseBlock => block.type === "tool_use"
+  );
+
+  if (!toolUse) {
+    throw new Error("Claude did not return a propose_broadened_brief tool call.");
+  }
+
+  return toolUse.input as { brief: string; changeSummary: string };
+}

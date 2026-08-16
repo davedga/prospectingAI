@@ -275,10 +275,15 @@ export function SettingsForm({ settings }: { settings: SettingsData }) {
             Vercel&apos;s free Hobby plan only fires the daily cron once,
             so the window mostly decides whether that one run is allowed
             to send at all — if it lands outside the window, sends wait
-            for tomorrow&apos;s run. For real intra-day spreading, point
-            an external scheduler (e.g. a free cron-job.org task) at{" "}
+            for tomorrow&apos;s run. Each run batches drafts/sends
+            concurrently and uses the full 60s Hobby allows, but at real
+            volume (50+ first emails/day) one run may still not finish
+            everything. For guaranteed daily volume, point a free external
+            scheduler (e.g. cron-job.org) at{" "}
             <code className="text-xs">/api/cron/send-followups</code>{" "}
-            hourly, or upgrade to Vercel Pro for more frequent cron.
+            hourly with header{" "}
+            <code className="text-xs">Authorization: Bearer &lt;CRON_SECRET&gt;</code>
+            , or upgrade to Vercel Pro for more frequent/longer cron runs.
           </p>
         </CardHeader>
         <CardContent className="max-w-md space-y-5">
@@ -363,13 +368,28 @@ export function SettingsForm({ settings }: { settings: SettingsData }) {
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="dailyEmailLimit">Max emails auto-sent / day</Label>
+            <Label htmlFor="dailyFirstEmailLimit">Max first emails auto-sent / day</Label>
             <Input
-              id="dailyEmailLimit"
-              name="dailyEmailLimit"
+              id="dailyFirstEmailLimit"
+              name="dailyFirstEmailLimit"
               type="number"
               min={0}
-              defaultValue={settings.dailyEmailLimit}
+              defaultValue={settings.dailyFirstEmailLimit}
+              required
+            />
+            <p className="text-xs text-neutral-500">
+              Its own budget, separate from follow-ups below, so a busy
+              follow-up day can&apos;t crowd out new outreach volume.
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="dailyFollowUpLimit">Max follow-ups auto-sent / day</Label>
+            <Input
+              id="dailyFollowUpLimit"
+              name="dailyFollowUpLimit"
+              type="number"
+              min={0}
+              defaultValue={settings.dailyFollowUpLimit}
               required
             />
           </div>

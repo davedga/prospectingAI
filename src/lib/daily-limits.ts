@@ -43,8 +43,22 @@ export async function getProspectedTodayCount(timezone: string): Promise<number>
   });
 }
 
-export async function getSentTodayCount(timezone: string): Promise<number> {
+export async function getFirstEmailsSentTodayCount(timezone: string): Promise<number> {
   return prisma.email.count({
-    where: { status: "sent", sentAt: { gte: startOfDayInTimezone(timezone) } },
+    where: {
+      status: "sent",
+      sequenceStep: 0,
+      sentAt: { gte: startOfDayInTimezone(timezone) },
+    },
+  });
+}
+
+export async function getFollowUpsSentTodayCount(timezone: string): Promise<number> {
+  return prisma.email.count({
+    where: {
+      status: "sent",
+      sequenceStep: { gt: 0 },
+      sentAt: { gte: startOfDayInTimezone(timezone) },
+    },
   });
 }

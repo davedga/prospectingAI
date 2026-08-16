@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { generateDiscoveryBatch } from "@/lib/discovery";
-import { checkExclusion } from "@/lib/exclusions";
+import { checkExclusion, getExcludedBrandSample } from "@/lib/exclusions";
 
 export type RunDiscoveryBatchOptions = {
   // Hard cap — never create more than this many companies this run.
@@ -15,12 +15,18 @@ export type RunDiscoveryBatchOptions = {
 // different names — broaden the brief so Claude actually has more room to
 // find viable candidates. The whole point of Discovery is a steady supply
 // of brands to onboard and scale on TikTok Shop, so a thin batch should
-// widen the net, not just retry narrowly.
-function broadenBrief(brief: string, attempt: number): string {
+// widen the net, not just retry narrowly. Already-contacted/excluded
+// brands are a useful signal of "what a good candidate looks like" here —
+// not to propose, but as profile examples to search adjacent to.
+function broadenBrief(brief: string, attempt: number, excludedSample: string[]): string {
   if (attempt <= 1) return brief;
+  const reference =
+    excludedSample.length > 0
+      ? `\n\nFor reference, here are brand profiles the agency has already worked with or excluded (do NOT propose these exact companies — find new, different brands with a similar or adjacent profile, category, or scale): ${excludedSample.join(", ")}.`
+      : "";
   return `${brief}
 
-This is retry attempt ${attempt} for this batch — the prior attempt(s) didn't surface enough new, non-excluded candidates. Broaden the search for this batch: consider adjacent brand categories, a wider revenue range, and brands at different stages of their TikTok Shop journey (not yet on it, or on it but still underscaled) — not just brands that match the original brief narrowly. The goal is a steady supply of viable brands for Dallas Global Agency to onboard and scale on TikTok Shop, so prioritize volume of qualified candidates this round over narrow precision.`;
+This is retry attempt ${attempt} for this batch — the prior attempt(s) didn't surface enough new, non-excluded candidates. Broaden the search for this batch: shift toward adjacent brand categories (e.g. beauty could become food & bev, or sports & fitness), extend the revenue range (e.g. a $3M floor could become $5M), and consider brands at different stages of their TikTok Shop journey (not yet on it, or on it but still underscaled) — not just brands that match the original brief narrowly. The goal is a steady supply of viable brands for Dallas Global Agency to onboard and scale on TikTok Shop, so prioritize volume of qualified candidates this round over narrow precision.${reference}`;
 }
 
 export async function runDiscoveryBatch(
@@ -44,6 +50,7 @@ export async function runDiscoveryBatch(
 
   const feedbackNotes = feedback.map((f) => f.note);
   const seenNames = new Set(excludedBrands.map((b) => b.name.toLowerCase()));
+  const excludedSample = maxAttempts > 1 ? await getExcludedBrandSample(25) : [];
 
   const discoveryRun = await prisma.discoveryRun.create({
     data: { prompt: brief },
@@ -52,16 +59,18 @@ export async function runDiscoveryBatch(
   const companyIds: string[] = [];
   let usableCount = 0;
   let attempts = 0;
+  let lastBriefUsed = brief;
 
   while (attempts < maxAttempts) {
     attempts += 1;
+    lastBriefUsed = broadenBrief(brief, attempts, excludedSample);
 
     const remainingBudget =
       typeof maxCompanies === "number" ? maxCompanies - companyIds.length : undefined;
     if (remainingBudget !== undefined && remainingBudget <= 0) break;
 
     const generated = await generateDiscoveryBatch({
-      brief: broadenBrief(brief, attempts),
+      brief: lastBriefUsed,
       excludedNames: Array.from(seenNames),
       feedbackNotes,
     });
