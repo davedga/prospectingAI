@@ -61,6 +61,7 @@ export async function updateSettings(
     const dailyDiscoveryLimit = Number(formData.get("dailyDiscoveryLimit"));
     const dailyProspectLimit = Number(formData.get("dailyProspectLimit"));
     const dailyEmailLimit = Number(formData.get("dailyEmailLimit"));
+    const minDiscoveryPerRun = Number(formData.get("minDiscoveryPerRun"));
     const abTestingEnabled = formData.get("abTestingEnabled") === "on";
     const abVariantAHint = (formData.get("abVariantAHint") as string) || null;
     const abVariantBHint = (formData.get("abVariantBHint") as string) || null;
@@ -87,6 +88,7 @@ export async function updateSettings(
         dailyDiscoveryLimit,
         dailyProspectLimit,
         dailyEmailLimit,
+        minDiscoveryPerRun,
         abTestingEnabled,
         abVariantAHint,
         abVariantBHint,

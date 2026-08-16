@@ -130,6 +130,14 @@ auto-send). Manual actions taken in the UI are never blocked by these.
   auto-discovered, POCs auto-prospected, and emails auto-sent per calendar
   day in `sendTimezone`. Enforced inside `src/lib/auto-pipeline.ts` and the
   cron's follow-up loop.
+- **Minimum discovery per run** (`minDiscoveryPerRun`, in
+  `src/lib/run-discovery.ts`) — a soft target under the daily max above. If
+  Claude's first batch comes up short of non-excluded candidates, Discovery
+  automatically retries (up to 5 attempts) with an auto-broadened brief
+  (wider categories/revenue range/TTS-maturity) instead of just accepting a
+  thin batch — the goal is a steady supply of brands to onboard and scale
+  on TikTok Shop, not a single narrow pass. If it still falls short after
+  retrying, the shortfall is logged rather than looping forever.
 - **A/B testing** (`abTestingEnabled`/`abVariantAHint`/`abVariantBHint`) —
   when on, each contact is randomly assigned variant A or B the first time
   a first-touch email is drafted for them (`Contact.variant`), reused for

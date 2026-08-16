@@ -146,6 +146,7 @@ model Settings {
   dailyDiscoveryLimit    Int      @default(20)
   dailyProspectLimit     Int      @default(20)
   dailyEmailLimit        Int      @default(30)
+  minDiscoveryPerRun     Int      @default(5)
   abTestingEnabled       Boolean  @default(false)
   abVariantAHint         String?  @db.Text
   abVariantBHint         String?  @db.Text

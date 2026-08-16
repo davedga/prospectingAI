@@ -323,6 +323,24 @@ export function SettingsForm({ settings }: { settings: SettingsData }) {
             </select>
           </div>
           <div className="space-y-1.5">
+            <Label htmlFor="minDiscoveryPerRun">Min brands discovered / run</Label>
+            <Input
+              id="minDiscoveryPerRun"
+              name="minDiscoveryPerRun"
+              type="number"
+              min={0}
+              defaultValue={settings.minDiscoveryPerRun}
+              required
+            />
+            <p className="text-xs text-neutral-500">
+              If Claude&apos;s first batch comes up short of this, Discovery
+              automatically retries with a broadened brief (wider
+              categories/revenue range/TTS-maturity) up to 5 times, or until
+              the daily max below is hit — instead of just accepting a thin
+              batch.
+            </p>
+          </div>
+          <div className="space-y-1.5">
             <Label htmlFor="dailyDiscoveryLimit">Max brands auto-discovered / day</Label>
             <Input
               id="dailyDiscoveryLimit"

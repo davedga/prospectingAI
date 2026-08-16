@@ -15,6 +15,9 @@ import { isWithinSendWindow } from "@/lib/send-window";
 export type AutoPipelineSummary = {
   discoveryRunId: string | null;
   discoveredCompanies: number;
+  discoveryUsableCompanies: number;
+  discoveryAttempts: number;
+  discoveryShortfall: boolean;
   discoverySkippedLimitReached: boolean;
   prospectedCompanies: number;
   prospectingErrors: number;
@@ -36,6 +39,9 @@ export async function runAutomatedPipeline(): Promise<AutoPipelineSummary> {
   const summary: AutoPipelineSummary = {
     discoveryRunId: null,
     discoveredCompanies: 0,
+    discoveryUsableCompanies: 0,
+    discoveryAttempts: 0,
+    discoveryShortfall: false,
     discoverySkippedLimitReached: false,
     prospectedCompanies: 0,
     prospectingErrors: 0,
@@ -58,13 +64,21 @@ export async function runAutomatedPipeline(): Promise<AutoPipelineSummary> {
       summary.discoverySkippedLimitReached = true;
     } else {
       try {
-        const { discoveryRunId, companyIds } = await runDiscoveryBatch(
-          settings.standingDiscoveryBrief.trim(),
-          settings.autoSelectDiscovered,
-          remaining
-        );
+        const { discoveryRunId, companyIds, usableCount, attempts, shortfall } =
+          await runDiscoveryBatch(settings.standingDiscoveryBrief.trim(), settings.autoSelectDiscovered, {
+            maxCompanies: remaining,
+            minCompanies: settings.minDiscoveryPerRun,
+          });
         summary.discoveryRunId = discoveryRunId;
         summary.discoveredCompanies = companyIds.length;
+        summary.discoveryUsableCompanies = usableCount;
+        summary.discoveryAttempts = attempts;
+        summary.discoveryShortfall = shortfall;
+        if (shortfall) {
+          console.warn(
+            `Discovery fell short of minDiscoveryPerRun (${settings.minDiscoveryPerRun}): only ${usableCount} usable candidates after ${attempts} attempt(s).`
+          );
+        }
       } catch (error) {
         console.error("Automated discovery failed", error);
       }
