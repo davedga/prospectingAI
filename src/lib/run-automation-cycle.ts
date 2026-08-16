@@ -8,9 +8,12 @@ import { isWithinSendWindow } from "@/lib/send-window";
 import { createDeadline } from "@/lib/time-budget";
 
 const FOLLOWUP_CONCURRENCY = 5;
-// Vercel Hobby's maxDuration ceiling is 60s; leave buffer for the request/
-// response overhead and Prisma connection teardown.
-const CYCLE_BUDGET_MS = 50_000;
+// Vercel Hobby's maxDuration ceiling is 60s, but the real constraint is
+// whatever external scheduler is calling this endpoint — most (including
+// cron-job.org's free tier) time out client-side well before 60s. Staying
+// well under that so the response reliably comes back and the scheduler
+// records a real success/failure instead of a client-side timeout.
+const CYCLE_BUDGET_MS = 25_000;
 
 export type FollowUpResult = {
   emailId: string;

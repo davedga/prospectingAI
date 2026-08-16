@@ -17,7 +17,7 @@ import { createDeadline, type Deadline } from "@/lib/time-budget";
 
 const DRAFT_SEND_CONCURRENCY = 5;
 const BRIEF_AUTO_TUNE_COOLDOWN_MS = 20 * 60 * 60 * 1000; // ~20h, roughly once/day
-const DEFAULT_PIPELINE_BUDGET_MS = 40_000;
+const DEFAULT_PIPELINE_BUDGET_MS = 25_000;
 
 export type AutoPipelineSummary = {
   discoveryRunId: string | null;

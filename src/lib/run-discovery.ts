@@ -13,10 +13,9 @@ export type RunDiscoveryBatchOptions = {
   maxAttempts?: number;
   // Wall-clock budget for the whole call (all attempts combined). Always
   // completes attempt 1; skips further retries once expired instead of
-  // risking a hard kill mid-write. Defaults to a generous 45s for
-  // standalone callers (e.g. the manual Discovery UI) — the automated
-  // pipeline passes its own shared deadline so multiple stages can share
-  // one wall-clock budget.
+  // risking a hard kill mid-write. Defaults to 25s for standalone callers
+  // (e.g. the manual Discovery UI) — the automated pipeline passes its own
+  // shared deadline so multiple stages can share one wall-clock budget.
   deadline?: Deadline;
 };
 
@@ -64,7 +63,7 @@ export async function runDiscoveryBatch(
   const maxCompanies = options?.maxCompanies;
   const minCompanies = options?.minCompanies ?? 0;
   const maxAttempts = Math.max(1, options?.maxAttempts ?? (minCompanies > 0 ? 3 : 1));
-  const deadline = options?.deadline ?? createDeadline(45_000);
+  const deadline = options?.deadline ?? createDeadline(25_000);
 
   const [excludedBrands, feedback] = await Promise.all([
     prisma.excludedBrand.findMany({ select: { name: true } }),
