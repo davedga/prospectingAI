@@ -57,20 +57,72 @@ export async function runAutomationCycle(
     };
   }
 
-  const dueFollowUps = await prisma.email.findMany({
-    where: {
-      status: "draft",
-      sequenceStep: { gt: 0 },
-      scheduledFor: { lte: new Date() },
-      subject: "",
-    },
-  });
-
   const results: FollowUpResult[] = [];
 
   const sentToday = await getFollowUpsSentTodayCount(settings.sendTimezone);
   let remainingSends = settings.dailyFollowUpLimit - sentToday;
   const withinWindow = isWithinSendWindow(settings);
+
+  // Flush any follow-up that already has real generated content but never
+  // successfully sent — either drafted-but-never-approved (window/budget
+  // blocked it before approval) or approved-but-send-failed. Without this,
+  // once content exists, the "due" query below (which requires subject
+  // to still be empty) never sees it again — it'd be stuck forever.
+  if (settings.autoApproveFollowUps && withinWindow && remainingSends > 0) {
+    const pendingFollowUps = await prisma.email.findMany({
+      where: {
+        sequenceStep: { gt: 0 },
+        status: { in: ["draft", "approved"] },
+        subject: { not: "" },
+      },
+      include: { contact: { include: { company: true } } },
+    });
+
+    for (let i = 0; i < pendingFollowUps.length; i += FOLLOWUP_CONCURRENCY) {
+      if (deadline.expired() || remainingSends <= 0) break;
+      const chunk = pendingFollowUps.slice(i, i + FOLLOWUP_CONCURRENCY);
+      await Promise.all(
+        chunk.map(async (email) => {
+          if (remainingSends <= 0) {
+            results.push({ emailId: email.id, ok: true, skipped: "daily email limit reached" });
+            return;
+          }
+          remainingSends -= 1;
+          try {
+            if (email.status === "draft") {
+              await prisma.email.update({
+                where: { id: email.id },
+                data: { status: "approved", approvedAt: new Date(), approvedBy },
+              });
+            }
+            const sendResult = await sendEmailAndAdvanceSequence({ ...email, status: "approved" });
+            results.push({
+              emailId: email.id,
+              ok: sendResult.ok,
+              error: sendResult.ok ? undefined : sendResult.error,
+            });
+          } catch (error) {
+            results.push({
+              emailId: email.id,
+              ok: false,
+              error: error instanceof Error ? error.message : "Failed to flush pending follow-up.",
+            });
+          }
+        })
+      );
+    }
+  }
+
+  const dueFollowUps = deadline.expired()
+    ? []
+    : await prisma.email.findMany({
+        where: {
+          status: "draft",
+          sequenceStep: { gt: 0 },
+          scheduledFor: { lte: new Date() },
+          subject: "",
+        },
+      });
 
   for (let i = 0; i < dueFollowUps.length; i += FOLLOWUP_CONCURRENCY) {
     if (deadline.expired()) break; // remaining follow-ups wait for the next run

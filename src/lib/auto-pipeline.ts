@@ -34,6 +34,7 @@ export type AutoPipelineSummary = {
   draftedFirstEmails: number;
   draftingErrors: number;
   sentFromAutoApproval: number;
+  flushedPendingFirstEmailsSent: number;
   sendErrors: number;
   sendSkippedOutsideWindow: number;
   sendSkippedLimitReached: number;
@@ -68,6 +69,7 @@ export async function runAutomatedPipeline(
     draftedFirstEmails: 0,
     draftingErrors: 0,
     sentFromAutoApproval: 0,
+    flushedPendingFirstEmailsSent: 0,
     sendErrors: 0,
     sendSkippedOutsideWindow: 0,
     sendSkippedLimitReached: 0,
@@ -197,10 +199,53 @@ export async function runAutomatedPipeline(
     let remainingSends = settings.dailyFirstEmailLimit - sentToday;
     const withinWindow = isWithinSendWindow(settings);
 
-    const needsDraft = await prisma.contact.findMany({
-      where: { selected: true, emails: { none: { sequenceStep: 0 } } },
-      include: { company: true },
-    });
+    // 3a. Flush anything already drafted+approved from a PRIOR run that
+    // never actually sent (window was closed, budget was hit, etc.) —
+    // without this, an approved-but-unsent email is invisible to the
+    // "needsDraft" query below forever, since that query only looks for
+    // contacts with zero first-touch emails at all.
+    if (withinWindow && remainingSends > 0) {
+      const pendingApproved = await prisma.email.findMany({
+        where: { status: "approved", sequenceStep: 0 },
+        include: { contact: { include: { company: true } } },
+      });
+
+      for (let i = 0; i < pendingApproved.length; i += DRAFT_SEND_CONCURRENCY) {
+        if (deadline.expired() || remainingSends <= 0) {
+          if (deadline.expired()) summary.timeBudgetExhausted = true;
+          break;
+        }
+        const chunk = pendingApproved.slice(i, i + DRAFT_SEND_CONCURRENCY);
+        await Promise.all(
+          chunk.map(async (email) => {
+            if (remainingSends <= 0) {
+              summary.sendSkippedLimitReached += 1;
+              return;
+            }
+            remainingSends -= 1;
+            try {
+              const result = await sendEmailAndAdvanceSequence(email);
+              if (result.ok) {
+                summary.flushedPendingFirstEmailsSent += 1;
+              } else {
+                summary.sendErrors += 1;
+              }
+            } catch (error) {
+              console.error(`Flushing pending first email ${email.id} failed`, error);
+              summary.sendErrors += 1;
+            }
+          })
+        );
+      }
+    }
+
+    // 3b. Draft first emails for contacts that don't have one yet.
+    const needsDraft = deadline.expired()
+      ? []
+      : await prisma.contact.findMany({
+          where: { selected: true, emails: { none: { sequenceStep: 0 } } },
+          include: { company: true },
+        });
 
     for (let i = 0; i < needsDraft.length; i += DRAFT_SEND_CONCURRENCY) {
       if (deadline.expired()) {

@@ -183,6 +183,13 @@ rather not run an external scheduler.
 - Nothing sends automatically — every email (first touch and follow-ups,
   unless auto-approve is turned on in Settings) waits in the Review Queue
   for explicit approval.
+- Every automated send path (first emails and follow-ups) flushes
+  previously drafted/approved-but-unsent items *before* generating new
+  ones — an email that got drafted or even approved but couldn't send
+  that run (send window closed, daily budget hit, a transient Gmail
+  error) is retried on the next invocation instead of being invisible to
+  every future run forever. This matters a lot with the many-short-runs
+  model above, since most invocations will land outside the send window.
 - The exclusion list is checked (fuzzy, case-insensitive) on every Discovery
   run before a company can reach `selected` status.
 - Login currently has no password check by design (see `src/auth.ts`) — any
