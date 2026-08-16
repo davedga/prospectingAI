@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { callDraftTool, CLAIMS_DISCIPLINE } from "@/lib/drafting";
+import { getSettings } from "@/lib/settings";
 
 export async function generateFollowUpContent(emailId: string, feedbackNote?: string) {
   const email = await prisma.email.findUniqueOrThrow({
@@ -29,6 +30,13 @@ export async function generateFollowUpContent(emailId: string, feedbackNote?: st
     ? Math.round((Date.now() - lastTouch.sentAt.getTime()) / (24 * 60 * 60 * 1000))
     : null;
 
+  // Reuses whichever variant was assigned at first-touch time, so a
+  // contact's whole sequence stays consistent — no re-randomizing here.
+  const settings = await getSettings();
+  const variant = settings.abTestingEnabled ? email.contact.variant : null;
+  const variantHint =
+    variant === "A" ? settings.abVariantAHint : variant === "B" ? settings.abVariantBHint : null;
+
   const systemPrompt = `You are drafting a follow-up outreach email for Dallas Global Agency's TikTok Shop brand-prospecting program.\n\n${CLAIMS_DISCIPLINE}\n\nStanding style feedback from the admin:\n${
     draftingFeedback.length > 0
       ? draftingFeedback.map((f) => `- ${f.note}`).join("\n")
@@ -54,6 +62,7 @@ ${
 }
 ${daysSinceLastTouch !== null ? `It has been ${daysSinceLastTouch} day(s) since the last touch.` : ""}
 ${feedbackNote ? `\nQuick note for this regeneration: ${feedbackNote}` : ""}
+${variantHint ? `\nA/B test angle for this email (variant ${variant}): ${variantHint}` : ""}
 
 No reply yet. Draft a follow-up that adds a new angle or new information versus the previous touch(es) — never "just checking in." End with a brief closing only (e.g. "Best," or "Thanks,") — do not sign with a name or company, a signature block is appended automatically after your draft. Never sign off using the recipient's own name.`;
 
@@ -65,6 +74,7 @@ No reply yet. Draft a follow-up that adds a new angle or new information versus 
       subject: draft.subject,
       body: draft.body,
       claimsNotToMake: draft.claimsNotToMake,
+      variant,
     },
     include: { contact: { include: { company: true } } },
   });

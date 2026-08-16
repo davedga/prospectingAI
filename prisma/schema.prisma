@@ -86,6 +86,7 @@ model Contact {
   decisionRole String // "Economic buyer" | "Functional owner" | "Operational champion" | "Influencer/router" | "Low relevance"
   selected     Boolean  @default(false)
   apolloId     String?
+  variant      String? // "A" | "B" — assigned once when A/B testing is on, reused for the whole sequence
   createdAt    DateTime @default(now())
 
   emails Email[]
@@ -109,6 +110,7 @@ model Email {
   openCount       Int       @default(0)
   clickedAt       DateTime?
   clickCount      Int       @default(0)
+  variant         String? // "A" | "B" — copied from Contact.variant at creation time
   createdAt       DateTime  @default(now())
 }
 
@@ -138,5 +140,14 @@ model Settings {
   autoRunDiscovery       Boolean  @default(false)
   autoSelectDiscovered   Boolean  @default(false)
   autoProspectSelected   Boolean  @default(false)
+  sendWindowStartHour    Int      @default(9)
+  sendWindowEndHour      Int      @default(18)
+  sendTimezone           String   @default("America/New_York")
+  dailyDiscoveryLimit    Int      @default(20)
+  dailyProspectLimit     Int      @default(20)
+  dailyEmailLimit        Int      @default(30)
+  abTestingEnabled       Boolean  @default(false)
+  abVariantAHint         String?  @db.Text
+  abVariantBHint         String?  @db.Text
   updatedAt              DateTime @updatedAt
 }

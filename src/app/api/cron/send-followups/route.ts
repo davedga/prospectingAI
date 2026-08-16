@@ -4,6 +4,8 @@ import { generateFollowUpContent } from "@/lib/followup-content";
 import { sendEmailAndAdvanceSequence } from "@/lib/send-email";
 import { getSettings } from "@/lib/settings";
 import { runAutomatedPipeline } from "@/lib/auto-pipeline";
+import { getSentTodayCount } from "@/lib/daily-limits";
+import { isWithinSendWindow } from "@/lib/send-window";
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
@@ -40,13 +42,26 @@ export async function GET(request: Request) {
     },
   });
 
-  const results: { emailId: string; ok: boolean; error?: string }[] = [];
+  const results: { emailId: string; ok: boolean; error?: string; skipped?: string }[] = [];
+
+  const sentToday = await getSentTodayCount(settings.sendTimezone);
+  let remainingSends = settings.dailyEmailLimit - sentToday;
+  const withinWindow = isWithinSendWindow(settings);
 
   for (const pending of dueFollowUps) {
     try {
       const generated = await generateFollowUpContent(pending.id);
 
       if (settings.autoApproveFollowUps) {
+        if (!withinWindow) {
+          results.push({ emailId: pending.id, ok: true, skipped: "outside send window" });
+          continue;
+        }
+        if (remainingSends <= 0) {
+          results.push({ emailId: pending.id, ok: true, skipped: "daily email limit reached" });
+          continue;
+        }
+
         await prisma.email.update({
           where: { id: generated.id },
           data: { status: "approved", approvedAt: new Date(), approvedBy: "auto (cron)" },
@@ -55,6 +70,7 @@ export async function GET(request: Request) {
           ...generated,
           status: "approved",
         });
+        if (sendResult.ok) remainingSends -= 1;
         results.push({
           emailId: pending.id,
           ok: sendResult.ok,

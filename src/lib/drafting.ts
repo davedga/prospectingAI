@@ -62,6 +62,8 @@ export async function draftFirstEmail(
     },
   });
 
+  const settings = await getSettings();
+
   const draftingFeedback = await prisma.feedback.findMany({
     where: { scope: "drafting" },
     orderBy: { createdAt: "desc" },
@@ -70,6 +72,19 @@ export async function draftFirstEmail(
   });
 
   const priorEmails = contact.emails;
+
+  // Assigned once per contact and reused for the whole sequence, so
+  // follow-ups stay consistent with whichever variant the first touch used.
+  let variant: string | null = null;
+  if (settings.abTestingEnabled) {
+    variant = contact.variant;
+    if (!variant) {
+      variant = Math.random() < 0.5 ? "A" : "B";
+      await prisma.contact.update({ where: { id: contactId }, data: { variant } });
+    }
+  }
+  const variantHint =
+    variant === "A" ? settings.abVariantAHint : variant === "B" ? settings.abVariantBHint : null;
 
   const systemPrompt = `You are drafting outreach email copy for Dallas Global Agency's TikTok Shop brand-prospecting program.\n\n${CLAIMS_DISCIPLINE}\n\nStanding style feedback from the admin:\n${
     draftingFeedback.length > 0
@@ -96,13 +111,13 @@ ${
 }
 
 ${feedbackNote ? `Quick note for this regeneration: ${feedbackNote}` : ""}
+${variantHint ? `\nA/B test angle for this email (variant ${variant}): ${variantHint}` : ""}
 
 Draft the first outreach email (sequence step 0) to this contact. End with a brief closing only (e.g. "Best," or "Thanks,") — do not sign with a name or company, a signature block is appended automatically after your draft. Never sign off using the recipient's own name.`;
 
   const draft = await callDraftTool(systemPrompt, userPrompt);
 
-  const settings = autoTrigger ? await getSettings() : null;
-  const shouldAutoApprove = Boolean(settings?.autoApproveFirstEmails);
+  const shouldAutoApprove = autoTrigger && settings.autoApproveFirstEmails;
   const statusFields = shouldAutoApprove
     ? { status: "approved", approvedAt: new Date(), approvedBy: "auto" }
     : { status: "draft" };
@@ -118,6 +133,7 @@ Draft the first outreach email (sequence step 0) to this contact. End with a bri
         subject: draft.subject,
         body: draft.body,
         claimsNotToMake: draft.claimsNotToMake,
+        variant,
         ...statusFields,
       },
     });
@@ -130,6 +146,7 @@ Draft the first outreach email (sequence step 0) to this contact. End with a bri
       subject: draft.subject,
       body: draft.body,
       claimsNotToMake: draft.claimsNotToMake,
+      variant,
       ...statusFields,
     },
   });

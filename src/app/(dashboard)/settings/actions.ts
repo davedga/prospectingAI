@@ -20,6 +20,15 @@ export async function updateSettings(formData: FormData) {
   const autoRunDiscovery = formData.get("autoRunDiscovery") === "on";
   const autoSelectDiscovered = formData.get("autoSelectDiscovered") === "on";
   const autoProspectSelected = formData.get("autoProspectSelected") === "on";
+  const sendWindowStartHour = Number(formData.get("sendWindowStartHour"));
+  const sendWindowEndHour = Number(formData.get("sendWindowEndHour"));
+  const sendTimezone = (formData.get("sendTimezone") as string) || "America/New_York";
+  const dailyDiscoveryLimit = Number(formData.get("dailyDiscoveryLimit"));
+  const dailyProspectLimit = Number(formData.get("dailyProspectLimit"));
+  const dailyEmailLimit = Number(formData.get("dailyEmailLimit"));
+  const abTestingEnabled = formData.get("abTestingEnabled") === "on";
+  const abVariantAHint = (formData.get("abVariantAHint") as string) || null;
+  const abVariantBHint = (formData.get("abVariantBHint") as string) || null;
 
   await prisma.settings.update({
     where: { id: settings.id },
@@ -37,6 +46,15 @@ export async function updateSettings(formData: FormData) {
       autoRunDiscovery,
       autoSelectDiscovered,
       autoProspectSelected,
+      sendWindowStartHour,
+      sendWindowEndHour,
+      sendTimezone,
+      dailyDiscoveryLimit,
+      dailyProspectLimit,
+      dailyEmailLimit,
+      abTestingEnabled,
+      abVariantAHint,
+      abVariantBHint,
     },
   });
 

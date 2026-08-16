@@ -2,7 +2,11 @@ import { prisma } from "@/lib/prisma";
 import { generateDiscoveryBatch } from "@/lib/discovery";
 import { checkExclusion } from "@/lib/exclusions";
 
-export async function runDiscoveryBatch(brief: string, autoSelect: boolean) {
+export async function runDiscoveryBatch(
+  brief: string,
+  autoSelect: boolean,
+  maxCompanies?: number
+) {
   const [excludedBrands, feedback] = await Promise.all([
     prisma.excludedBrand.findMany({ select: { name: true } }),
     prisma.feedback.findMany({
@@ -13,11 +17,14 @@ export async function runDiscoveryBatch(brief: string, autoSelect: boolean) {
     }),
   ]);
 
-  const candidates = await generateDiscoveryBatch({
+  const generated = await generateDiscoveryBatch({
     brief,
     excludedNames: excludedBrands.map((b) => b.name),
     feedbackNotes: feedback.map((f) => f.note),
   });
+
+  const candidates =
+    typeof maxCompanies === "number" ? generated.slice(0, Math.max(0, maxCompanies)) : generated;
 
   const discoveryRun = await prisma.discoveryRun.create({
     data: { prompt: brief },

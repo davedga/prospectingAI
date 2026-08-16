@@ -109,6 +109,34 @@ routes are exempted from the login middleware in `src/proxy.ts` since recipients
 mail clients hit them with no session. Aggregated counts per company show up in the
 Brands page's "Engagement" column. Requires `APP_URL` to be set — see above.
 
+## Send window, daily limits, and A/B testing
+
+All configured in Settings (`prisma/schema.prisma`'s `Settings` model), and
+all gate automated activity only — the daily cron and the autonomous-mode
+toggles (`autoRunDiscovery`/`autoSelectDiscovered`/`autoProspectSelected`/
+auto-send). Manual actions taken in the UI are never blocked by these.
+
+- **Send window** (`sendWindowStartHour`/`sendWindowEndHour`/`sendTimezone`,
+  checked in `src/lib/send-window.ts`) — automated sends only actually fire
+  via the Gmail API within this local-time window. Vercel's free Hobby plan
+  only fires the daily cron once, so in practice this mostly decides whether
+  that single run is allowed to send at all; if it lands outside the window,
+  drafted/approved emails wait for the next run. For real intra-day spread,
+  either upgrade to Vercel Pro (more frequent cron) or point a free external
+  scheduler (e.g. cron-job.org) at `/api/cron/send-followups` hourly with
+  the `Authorization: Bearer <CRON_SECRET>` header.
+- **Daily limits** (`dailyDiscoveryLimit`/`dailyProspectLimit`/
+  `dailyEmailLimit`, checked in `src/lib/daily-limits.ts`) — caps brands
+  auto-discovered, POCs auto-prospected, and emails auto-sent per calendar
+  day in `sendTimezone`. Enforced inside `src/lib/auto-pipeline.ts` and the
+  cron's follow-up loop.
+- **A/B testing** (`abTestingEnabled`/`abVariantAHint`/`abVariantBHint`) —
+  when on, each contact is randomly assigned variant A or B the first time
+  a first-touch email is drafted for them (`Contact.variant`), reused for
+  their whole sequence including follow-ups. The matching hint gets passed
+  into the drafting prompt as the angle to take. Open rate per variant
+  (aggregated across all contacts) shows up at the top of the Brands page.
+
 ## Notes
 
 - Nothing sends automatically — every email (first touch and follow-ups,

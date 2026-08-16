@@ -10,6 +10,11 @@ import { updateSettings } from "./actions";
 const LOGO_URL =
   "https://lh7-rt.googleusercontent.com/docsz/AD_4nXdmprLPPbIK692SZtwrP8kYbgi-_EPzhWBNTFh8qOPjmZ4icw0TXMPRuBVZV_PcAYtHmYw9MCTYCV7FSa5hS8CMc8U6kEPm0BRlvrFGpORnKauiASyHsUwRg4V1F6F-sCccqwck";
 
+const DEFAULT_VARIANT_A_HINT =
+  "Open directly with a specific, concrete detail about the company and the ask - no question in the first line. Direct and to the point.";
+const DEFAULT_VARIANT_B_HINT =
+  "Open with a short, genuine question tied to a specific detail about the company before the ask. Slightly more conversational tone.";
+
 const DEFAULT_SIGNATURE_HTML = `<table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, Helvetica, sans-serif; font-size: 13px; color: #000000;">
   <tr>
     <td style="padding-right: 14px; vertical-align: top;">
@@ -215,6 +220,147 @@ export default async function SettingsPage() {
                   this setting.
                 </p>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-semibold">
+              Send window &amp; daily limits
+            </CardTitle>
+            <p className="text-xs text-neutral-500">
+              Only gate automated sends/discovery/prospecting (the cron and
+              the autonomous-mode toggles above) — manual actions you
+              trigger yourself in the UI are never blocked by these.
+              Vercel&apos;s free Hobby plan only fires the daily cron once,
+              so the window mostly decides whether that one run is allowed
+              to send at all — if it lands outside the window, sends wait
+              for tomorrow&apos;s run. For real intra-day spreading, point
+              an external scheduler (e.g. a free cron-job.org task) at{" "}
+              <code className="text-xs">/api/cron/send-followups</code>{" "}
+              hourly, or upgrade to Vercel Pro for more frequent cron.
+            </p>
+          </CardHeader>
+          <CardContent className="max-w-md space-y-5">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="sendWindowStartHour">Window start (hour, 24h)</Label>
+                <Input
+                  id="sendWindowStartHour"
+                  name="sendWindowStartHour"
+                  type="number"
+                  min={0}
+                  max={23}
+                  defaultValue={settings.sendWindowStartHour}
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="sendWindowEndHour">Window end (hour, 24h)</Label>
+                <Input
+                  id="sendWindowEndHour"
+                  name="sendWindowEndHour"
+                  type="number"
+                  min={0}
+                  max={23}
+                  defaultValue={settings.sendWindowEndHour}
+                  required
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="sendTimezone">Timezone</Label>
+              <select
+                id="sendTimezone"
+                name="sendTimezone"
+                defaultValue={settings.sendTimezone}
+                className="flex h-9 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm"
+              >
+                <option value="America/New_York">Eastern (America/New_York)</option>
+                <option value="America/Chicago">Central (America/Chicago)</option>
+                <option value="America/Denver">Mountain (America/Denver)</option>
+                <option value="America/Los_Angeles">Pacific (America/Los_Angeles)</option>
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="dailyDiscoveryLimit">Max brands auto-discovered / day</Label>
+              <Input
+                id="dailyDiscoveryLimit"
+                name="dailyDiscoveryLimit"
+                type="number"
+                min={0}
+                defaultValue={settings.dailyDiscoveryLimit}
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="dailyProspectLimit">Max POCs auto-prospected / day</Label>
+              <Input
+                id="dailyProspectLimit"
+                name="dailyProspectLimit"
+                type="number"
+                min={0}
+                defaultValue={settings.dailyProspectLimit}
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="dailyEmailLimit">Max emails auto-sent / day</Label>
+              <Input
+                id="dailyEmailLimit"
+                name="dailyEmailLimit"
+                type="number"
+                min={0}
+                defaultValue={settings.dailyEmailLimit}
+                required
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-semibold">
+              A/B testing by open rate
+            </CardTitle>
+            <p className="text-xs text-neutral-500">
+              When on, each contact is randomly assigned variant A or B the
+              first time a first-touch email is drafted for them (and kept
+              for their whole sequence, including follow-ups). The hints
+              below get passed to the drafting prompt as the angle to take;
+              open rates per variant show up on the Brands page.
+            </p>
+          </CardHeader>
+          <CardContent className="max-w-lg space-y-4">
+            <div className="flex items-start gap-2">
+              <Checkbox
+                id="abTestingEnabled"
+                name="abTestingEnabled"
+                defaultChecked={settings.abTestingEnabled}
+                className="mt-0.5"
+              />
+              <Label htmlFor="abTestingEnabled" className="font-normal">
+                Enable A/B variant assignment
+              </Label>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="abVariantAHint">Variant A angle</Label>
+              <Textarea
+                id="abVariantAHint"
+                name="abVariantAHint"
+                rows={2}
+                defaultValue={settings.abVariantAHint ?? DEFAULT_VARIANT_A_HINT}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="abVariantBHint">Variant B angle</Label>
+              <Textarea
+                id="abVariantBHint"
+                name="abVariantBHint"
+                rows={2}
+                defaultValue={settings.abVariantBHint ?? DEFAULT_VARIANT_B_HINT}
+              />
             </div>
           </CardContent>
         </Card>
