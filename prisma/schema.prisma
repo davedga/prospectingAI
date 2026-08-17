@@ -87,6 +87,9 @@ model Contact {
   selected     Boolean  @default(false)
   apolloId     String?
   variant      String? // "A" | "B" — assigned once when A/B testing is on, reused for the whole sequence
+  gmailThreadId   String? // set on first send, reused for every follow-up so the whole sequence threads together
+  firstMessageId  String? // RFC Message-ID of the first-touch email, used as In-Reply-To/References on follow-ups
+  repliedAt       DateTime? // set once a reply is detected in the Gmail thread — stops all further follow-ups
   createdAt    DateTime @default(now())
 
   emails Email[]

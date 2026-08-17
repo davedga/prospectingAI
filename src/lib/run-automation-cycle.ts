@@ -6,6 +6,7 @@ import { runAutomatedPipeline, type AutoPipelineSummary } from "@/lib/auto-pipel
 import { getFollowUpsSentTodayCount } from "@/lib/daily-limits";
 import { isWithinSendWindow } from "@/lib/send-window";
 import { createDeadline } from "@/lib/time-budget";
+import { checkThreadForReply, resolveThreadIdFromMessageId } from "@/lib/gmail-replies";
 
 const FOLLOWUP_CONCURRENCY = 5;
 // Vercel Hobby's maxDuration ceiling is 60s, but the real constraint is
@@ -26,6 +27,7 @@ export type AutomationCycleResult = {
   pipeline: AutoPipelineSummary | null;
   processed: number;
   results: FollowUpResult[];
+  repliesDetected: number;
   skipped?: string;
 };
 
@@ -53,11 +55,82 @@ export async function runAutomationCycle(
       pipeline: pipelineSummary,
       processed: 0,
       results: [],
+      repliesDetected: 0,
       skipped: "autoGenerateFollowUps is off — follow-ups must be drafted manually.",
     };
   }
 
   const results: FollowUpResult[] = [];
+  let repliesDetected = 0;
+
+  // Check Gmail for replies before touching any follow-up — a contact who
+  // replied should never get another automated touch. Scoped to contacts
+  // who'd actually be affected (have a pending, not-yet-sent follow-up)
+  // to keep this bounded. Backfills gmailThreadId for contacts sent
+  // before thread tracking existed, using the Gmail message ID already
+  // stored on their sent first-touch email.
+  const contactsToCheck = deadline.expired()
+    ? []
+    : await prisma.contact.findMany({
+        where: {
+          repliedAt: null,
+          emails: { some: { sequenceStep: { gt: 0 }, status: { in: ["draft", "approved"] } } },
+        },
+        select: {
+          id: true,
+          gmailThreadId: true,
+          emails: {
+            where: { sequenceStep: 0, status: "sent" },
+            select: { resendMessageId: true },
+            take: 1,
+          },
+        },
+      });
+
+  for (let i = 0; i < contactsToCheck.length; i += FOLLOWUP_CONCURRENCY) {
+    if (deadline.expired()) break;
+    const chunk = contactsToCheck.slice(i, i + FOLLOWUP_CONCURRENCY);
+    await Promise.all(
+      chunk.map(async (contact) => {
+        try {
+          let threadId = contact.gmailThreadId ?? undefined;
+          const firstSentMessageId = contact.emails[0]?.resendMessageId ?? undefined;
+
+          if (!threadId && firstSentMessageId) {
+            threadId = await resolveThreadIdFromMessageId(firstSentMessageId);
+            if (threadId) {
+              await prisma.contact.update({
+                where: { id: contact.id },
+                data: { gmailThreadId: threadId },
+              });
+            }
+          }
+          if (!threadId) return; // nothing sent yet, or unresolvable — nothing to check
+
+          const replied = await checkThreadForReply(threadId);
+          if (!replied) return;
+
+          repliesDetected += 1;
+          await prisma.$transaction([
+            prisma.contact.update({
+              where: { id: contact.id },
+              data: { repliedAt: new Date() },
+            }),
+            prisma.email.updateMany({
+              where: {
+                contactId: contact.id,
+                sequenceStep: { gt: 0 },
+                status: { in: ["draft", "approved"] },
+              },
+              data: { status: "cancelled" },
+            }),
+          ]);
+        } catch (error) {
+          console.error(`Reply check failed for contact ${contact.id}`, error);
+        }
+      })
+    );
+  }
 
   const sentToday = await getFollowUpsSentTodayCount(settings.sendTimezone);
   let remainingSends = settings.dailyFollowUpLimit - sentToday;
@@ -172,5 +245,5 @@ export async function runAutomationCycle(
     );
   }
 
-  return { pipeline: pipelineSummary, processed: results.length, results };
+  return { pipeline: pipelineSummary, processed: results.length, results, repliesDetected };
 }

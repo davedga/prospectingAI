@@ -1,7 +1,8 @@
 import "server-only";
+import { randomBytes } from "crypto";
 import { google } from "googleapis";
 
-function getGmailClient() {
+export function getGmailClient() {
   const clientId = process.env.GMAIL_CLIENT_ID;
   const clientSecret = process.env.GMAIL_CLIENT_SECRET;
   const refreshToken = process.env.GMAIL_REFRESH_TOKEN;
@@ -31,25 +32,41 @@ function base64UrlEncode(input: string) {
     .replace(/=+$/, "");
 }
 
+// Self-generated RFC 2822 Message-ID so we can thread follow-ups via
+// In-Reply-To/References without an extra API round-trip to fetch the
+// Message-ID Gmail would otherwise assign.
+function generateMessageId(fromAddress: string) {
+  const domain = fromAddress.split("@")[1] ?? "dallasglobal.com";
+  return `<${randomBytes(16).toString("hex")}@${domain}>`;
+}
+
 function buildRawMessage({
   from,
   to,
   subject,
   text,
   html,
+  messageId,
+  inReplyToMessageId,
 }: {
   from: string;
   to: string;
   subject: string;
   text: string;
   html?: string;
+  messageId: string;
+  inReplyToMessageId?: string;
 }) {
   const headers = [
     `From: ${from}`,
     `To: ${to}`,
     `Subject: ${encodeSubject(subject)}`,
+    `Message-ID: ${messageId}`,
     "MIME-Version: 1.0",
   ];
+  if (inReplyToMessageId) {
+    headers.push(`In-Reply-To: ${inReplyToMessageId}`, `References: ${inReplyToMessageId}`);
+  }
 
   if (!html) {
     const message = [...headers, 'Content-Type: text/plain; charset="UTF-8"', "", text].join(
@@ -85,20 +102,29 @@ export async function sendGmailMessage({
   subject,
   text,
   html,
+  threadId,
+  inReplyToMessageId,
 }: {
   from: string;
   to: string;
   subject: string;
   text: string;
   html?: string;
+  // Gmail's own thread grouping — pass the first-touch send's threadId on
+  // follow-ups so the whole sequence stays in one thread.
+  threadId?: string;
+  // RFC Message-ID of the first-touch email — sets In-Reply-To/References
+  // so non-Gmail mail clients thread correctly too.
+  inReplyToMessageId?: string;
 }) {
   const gmail = getGmailClient();
-  const raw = buildRawMessage({ from, to, subject, text, html });
+  const messageId = generateMessageId(from);
+  const raw = buildRawMessage({ from, to, subject, text, html, messageId, inReplyToMessageId });
 
   const res = await gmail.users.messages.send({
     userId: "me",
-    requestBody: { raw },
+    requestBody: { raw, threadId },
   });
 
-  return { id: res.data.id ?? undefined };
+  return { id: res.data.id ?? undefined, threadId: res.data.threadId ?? undefined, messageId };
 }

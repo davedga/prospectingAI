@@ -58,8 +58,12 @@ gets you in; there's no password.
 5. Go to [developers.google.com/oauthplayground](https://developers.google.com/oauthplayground):
    - Gear icon (top right) → check "Use your own OAuth credentials" → paste
      the Client ID/Secret from step 4.
-   - In the scopes list on the left, find and select
-     `https://www.googleapis.com/auth/gmail.send`, then **Authorize APIs**.
+   - In the scopes list on the left, find and select **both**
+     `https://www.googleapis.com/auth/gmail.send` **and**
+     `https://www.googleapis.com/auth/gmail.metadata`, then **Authorize APIs**.
+     (`gmail.send` is required for sending at all; `gmail.metadata` is
+     required for reply detection below — it grants read access to message
+     headers/threading only, not message bodies.)
    - Sign in with the Gmail/Workspace account that should send the outreach
      emails, and grant access.
    - Click **Exchange authorization code for tokens** — copy the
@@ -70,11 +74,30 @@ gets you in; there's no password.
 No DNS/domain verification needed — you're sending through Gmail's own
 infrastructure as that account.
 
-**Known gap:** reply detection isn't wired up for Gmail-sent mail. The
-`/api/webhooks/resend-inbound` route still exists but only fires if you
-separately connect Resend's inbound webhook, which won't see replies to
-Gmail-sent emails at all. Building real reply detection for this setup means
-polling or watching the Gmail inbox via the Gmail API — not yet built.
+**If you set up Gmail sending before reply detection existed**, your
+existing `GMAIL_REFRESH_TOKEN` only has the `gmail.send` scope and reply
+detection will fail with a 403 until you redo step 5 above with both scopes
+selected, then update `GMAIL_REFRESH_TOKEN` in Vercel with the new token and
+redeploy.
+
+### Reply detection
+
+Every send captures a self-generated RFC `Message-ID` and, on first touch,
+the Gmail-assigned `threadId` (`src/lib/gmail.ts`), persisted onto
+`Contact.gmailThreadId`/`Contact.firstMessageId`. Follow-ups reuse both —
+Gmail's `threadId` param plus `In-Reply-To`/`References` headers — so the
+whole sequence threads together for the recipient and for us.
+
+Before touching any follow-up, `run-automation-cycle.ts` checks every
+contact with a pending (drafted or approved but unsent) follow-up for a
+reply via `src/lib/gmail-replies.ts`'s `checkThreadForReply()` (looks for
+any message in the thread not from `ADMIN_EMAIL`). If found: `Contact.repliedAt`
+is set and all their pending follow-ups are cancelled — for good, they never
+get another automated touch, checked again by `scheduleNextFollowUp()` as a
+second guard. Contacts sent an email before this feature existed (no
+`gmailThreadId` stored) get backfilled automatically via
+`resolveThreadIdFromMessageId()`, using the Gmail message ID already stored
+from their send.
 
 ## Deploying to Vercel
 
