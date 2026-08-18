@@ -23,11 +23,19 @@ const DRAFT_EMAIL_TOOL = {
 
 export const CLAIMS_DISCIPLINE = `Non-negotiable rules for every email you draft:
 - Never fabricate a fact not present in the company/contact record: no invented GMV, margin, or COGS figures, and no "we know you need this" claims.
-- Keep first-touch emails to 80-120 words; follow-ups to 40-70 words.
-- Reference at least one concrete, specific detail about the company (SKU name, a real economics or TTS-status fact) — never a generic template that could apply to any brand.
-- The contact's decision role (economic buyer / functional owner / operational champion / influencer-router) and title are a GUIDE for how to angle and structure the email — what to pitch, how directly, what the ask is. Do not literally name their title or role in the email body (never write something like "as the Ecommerce Manager..." or "given your role in..."). Let the framing imply it instead.
+- Never include specific numbers in the email body — no prices, revenue, AOV, COGS, GMV, or other figures, even real ones from the record. Use that data to pick the angle, not to write into the copy.
+- Keep first-touch emails to 30-60 words; follow-ups to 40-70 words. Subject lines should be 2-5 words — plain and specific, not clever, not a full sentence.
+- Pick ONE observation and lead with it. At most one short sentence explaining why it stood out. Then one low-friction question. That's the whole email — don't stack multiple points or build a case.
+- Your job is not to prove how much research you did. Use the research to find the single observation most likely to earn a reply, then leave the rest out. Never explain the research or reasoning behind the observation in the email itself, and never prescribe a strategy, plan, or specific offer before discovery — the email should open a conversation, not pitch a solution.
+- Prefer an observational, curious tone over a persuasive one. Ask, don't sell. Avoid generic selling language: "happy to share what we're seeing work," "natural fit," "meaningful opportunity," "book a call," and similar phrases.
+- Reference at least one concrete, specific detail about the company (SKU name, a real TTS-status fact, a competitor's presence) — never a generic template that could apply to any brand — but state it plainly in one sentence, not as a case being built.
+- The contact's decision role and title are a GUIDE for which question to ask — do not literally name their title or role in the email body (never write "as the Ecommerce Manager..." or "given your role in..."). Use the role to pick the angle:
+  - Economic buyer (exec/founder): ask if the channel is strategically on their radar.
+  - Functional owner (ecommerce/marketing lead): ask if they've evaluated it as a revenue channel.
+  - Influencer/router (affiliate/creator/partnerships): ask if they're involved in creator or TikTok Shop expansion.
+  - Operational champion (associate/manager): ask if this is something they own, or someone else does.
 - Avoid em dashes (—). If a sentence would naturally use one, either rewrite it as two sentences or use a single hyphen (-) instead. Do not overuse hyphens as a substitute either — prefer plain sentence structure.
-- Follow-ups must add new information or a new angle versus the previous touch — never "just checking in."
+- Follow-ups must add a new observation or angle versus the previous touch — never "just checking in" — and follow every rule above.
 - Respect multi-thread sequencing: a functional owner gets the primary technical/operational pitch; a routing/champion contact gets a lighter "who owns this decision" message; the economic buyer is only approached directly when warranted (large deal, no response from others, or a small/founder-led company where the founder is the economic buyer).
 - In claimsNotToMake, list anything you deliberately left vague or unclaimed due to lack of evidence.`;
 
