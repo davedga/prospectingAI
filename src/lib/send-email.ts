@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { sendGmailMessage } from "@/lib/gmail";
+import { resolveThreadIdFromMessageId } from "@/lib/gmail-replies";
 import { scheduleNextFollowUp } from "@/lib/followups";
 import { getSettings } from "@/lib/settings";
 import { bodyToHtml } from "@/lib/email-html";
@@ -27,8 +28,36 @@ export async function sendEmailAndAdvanceSequence(email: EmailWithContact) {
     return { ok: false as const, error: "ADMIN_EMAIL is not set." };
   }
 
+  // Follow-ups for contacts sent before thread tracking existed won't have
+  // a gmailThreadId yet — try to resolve one now from their sent first
+  // touch's Gmail message ID before falling back to starting a fresh
+  // thread. Requires the gmail.metadata scope; fails silently (and
+  // harmlessly) if that isn't granted yet.
+  let knownThreadId = email.contact.gmailThreadId ?? undefined;
+  const knownFirstMessageId = email.contact.firstMessageId ?? undefined;
+  if (email.sequenceStep > 0 && !knownThreadId) {
+    const firstTouch = await prisma.email.findFirst({
+      where: { contactId: email.contactId, sequenceStep: 0, status: "sent" },
+      select: { resendMessageId: true },
+    });
+    if (firstTouch?.resendMessageId) {
+      try {
+        const resolved = await resolveThreadIdFromMessageId(firstTouch.resendMessageId);
+        if (resolved) {
+          knownThreadId = resolved;
+          await prisma.contact.update({
+            where: { id: email.contactId },
+            data: { gmailThreadId: resolved },
+          });
+        }
+      } catch (error) {
+        console.error(`Could not resolve thread for contact ${email.contactId}`, error);
+      }
+    }
+  }
+
   let gmailMessageId: string | undefined;
-  let threadId: string | undefined;
+  let sentThreadId: string | undefined;
   let rfcMessageId: string | undefined;
   try {
     const sendResult = await sendGmailMessage({
@@ -37,13 +66,11 @@ export async function sendEmailAndAdvanceSequence(email: EmailWithContact) {
       subject: email.subject,
       text,
       html,
-      // Reuses the first-touch thread/Message-ID for follow-ups so the
-      // whole sequence stays in one thread — undefined on the first send.
-      threadId: email.contact.gmailThreadId ?? undefined,
-      inReplyToMessageId: email.contact.firstMessageId ?? undefined,
+      threadId: knownThreadId,
+      inReplyToMessageId: knownFirstMessageId,
     });
     gmailMessageId = sendResult.id;
-    threadId = sendResult.threadId;
+    sentThreadId = sendResult.threadId;
     rfcMessageId = sendResult.messageId;
   } catch (error) {
     return {
@@ -62,13 +89,15 @@ export async function sendEmailAndAdvanceSequence(email: EmailWithContact) {
     },
   });
 
-  // Anchor the thread on whichever send happens to be first to succeed —
-  // normally the first-touch email, but this self-heals if that one
-  // somehow didn't get persisted.
-  if (!email.contact.gmailThreadId && threadId) {
+  // Only anchor the thread from a send's own result when it's genuinely
+  // the first touch — a follow-up that couldn't resolve the real thread
+  // above gets its own fresh Gmail thread for delivery purposes, but that
+  // must never be persisted as if it were canonical, or a later, correct
+  // backfill attempt would be permanently blocked by the wrong value.
+  if (email.sequenceStep === 0 && !knownThreadId && sentThreadId) {
     await prisma.contact.update({
       where: { id: email.contactId },
-      data: { gmailThreadId: threadId, firstMessageId: rfcMessageId },
+      data: { gmailThreadId: sentThreadId, firstMessageId: rfcMessageId },
     });
   }
 
