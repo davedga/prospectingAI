@@ -37,7 +37,15 @@ export async function generateFollowUpContent(emailId: string, feedbackNote?: st
   const variantHint =
     variant === "A" ? settings.abVariantAHint : variant === "B" ? settings.abVariantBHint : null;
 
-  const systemPrompt = `You are drafting a follow-up outreach email for Dallas Global Agency's TikTok Shop brand-prospecting program.\n\n${CLAIMS_DISCIPLINE}\n\nStanding style feedback from the admin:\n${
+  const isFinalTouch = email.sequenceStep >= settings.sequenceLength - 1;
+
+  const followUpStructure = `Follow-up structure: assume no response has come in yet. Add a new, more specific observation than the previous touch(es) — never "just checking in," never re-explain the original pitch. Get shorter and more direct as the sequence progresses (this is touch #${email.sequenceStep}). Follow-ups don't need to end in a question every time — a plain observational statement that naturally invites a reply is fine, especially later in the sequence.${
+    isFinalTouch
+      ? ` This is the LAST touch in the sequence — make it a clean, low-pressure close with no apology or escape-hatch phrase. Example of the right tone: "Is this still something you're weighing, or has it dropped off the radar?" Not: "no worries if not, just let me know."`
+      : ""
+  }`;
+
+  const systemPrompt = `You are drafting a follow-up outreach email for Dallas Global Agency's TikTok Shop brand-prospecting program.\n\n${CLAIMS_DISCIPLINE}\n\n${followUpStructure}\n\nStanding style feedback from the admin:\n${
     draftingFeedback.length > 0
       ? draftingFeedback.map((f) => `- ${f.note}`).join("\n")
       : "(none yet)"
@@ -62,9 +70,9 @@ ${
 }
 ${daysSinceLastTouch !== null ? `It has been ${daysSinceLastTouch} day(s) since the last touch.` : ""}
 ${feedbackNote ? `\nQuick note for this regeneration: ${feedbackNote}` : ""}
-${variantHint ? `\nA/B test angle for this email (variant ${variant}): ${variantHint}` : ""}
+${variantHint ? `\nStanding personalization approach for this contact (variant ${variant}): ${variantHint}` : ""}
 
-No reply yet. Draft a follow-up that adds a new angle or new information versus the previous touch(es) — never "just checking in." End with a brief closing only (e.g. "Best," or "Thanks,") — do not sign with a name or company, a signature block is appended automatically after your draft. Never sign off using the recipient's own name.`;
+Draft this follow-up. End with a brief closing only (e.g. "Best," or "Thanks,") — do not sign with a name or company, a signature block is appended automatically after your draft. Never sign off using the recipient's own name.`;
 
   const draft = await callDraftTool(systemPrompt, userPrompt);
 

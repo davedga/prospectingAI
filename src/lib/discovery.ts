@@ -118,6 +118,8 @@ For every candidate company you propose, include real, verifiable, specific deta
 Never propose a brand whose name matches (even loosely) one of these already-contacted/excluded brands:
 ${excludedNames.length > 0 ? excludedNames.join(", ") : "(none yet)"}
 
+Hard qualification rule: never propose frozen-food brands (frozen meals, frozen baked goods, ice cream, or any product requiring frozen shipping/fulfillment). TikTok Shop's logistics don't currently support that category, regardless of how good a fit the brand looks otherwise.
+
 Standing feedback from the admin that must shape every batch you generate:
 ${feedbackNotes.length > 0 ? feedbackNotes.map((n) => `- ${n}`).join("\n") : "(none yet)"}
 
@@ -189,6 +191,8 @@ export async function proposeBroadenedBrief({
 The current brief keeps producing too few new, viable candidates (only ${usableCount} of a target ${targetCount} in the most recent run). Rewrite it to be moderately broader — shift toward adjacent categories, extend the revenue range, or relax TikTok Shop maturity requirements — similar in spirit to how "beauty" might become "beauty or food & bev", or a revenue floor of $3M might become $5M. Don't discard the original intent entirely, just widen it enough to unblock volume.
 
 ${excludedSample.length > 0 ? `For reference, here are brand profiles the agency has already worked with or excluded (do NOT reference these exact companies by name in the rewritten brief — they're just examples of the kind of brand profile that's relevant): ${excludedSample.join(", ")}.` : ""}
+
+Hard qualification rule that the rewritten brief must never violate: frozen-food brands (frozen meals, frozen baked goods, ice cream, or anything requiring frozen shipping/fulfillment) are permanently off-limits — TikTok Shop's logistics don't support that category. Never broaden into it, even as an example of an adjacent category.
 
 Call the propose_broadened_brief tool with the full rewritten brief text and a one-line summary of what changed.`;
 

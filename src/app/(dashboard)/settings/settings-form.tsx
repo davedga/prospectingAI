@@ -17,9 +17,9 @@ const LOGO_URL =
   "https://lh7-rt.googleusercontent.com/docsz/AD_4nXdmprLPPbIK692SZtwrP8kYbgi-_EPzhWBNTFh8qOPjmZ4icw0TXMPRuBVZV_PcAYtHmYw9MCTYCV7FSa5hS8CMc8U6kEPm0BRlvrFGpORnKauiASyHsUwRg4V1F6F-sCccqwck";
 
 const DEFAULT_VARIANT_A_HINT =
-  "Open directly with a specific, concrete detail about the company and the ask - no question in the first line. Direct and to the point.";
+  "Keep the observation at the category level even when the record has brand-specific detail available (bundle structure, hero SKU, listing type). General, not research-heavy.";
 const DEFAULT_VARIANT_B_HINT =
-  "Open with a short, genuine question tied to a specific detail about the company before the ask. Slightly more conversational tone.";
+  "When the record supports it, surface the specific brand-level reason this company looks like a good fit for TikTok Shop (bundle structure, hero SKU, listing type, or economics) instead of a general category-level observation. Never cite numbers.";
 
 const DEFAULT_SIGNATURE_HTML = `<table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, Helvetica, sans-serif; font-size: 13px; color: #000000;">
   <tr>
