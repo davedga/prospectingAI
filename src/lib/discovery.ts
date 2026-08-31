@@ -118,7 +118,10 @@ For every candidate company you propose, include real, verifiable, specific deta
 Never propose a brand whose name matches (even loosely) one of these already-contacted/excluded brands:
 ${excludedNames.length > 0 ? excludedNames.join(", ") : "(none yet)"}
 
-Hard qualification rule: never propose frozen-food brands (frozen meals, frozen baked goods, ice cream, or any product requiring frozen shipping/fulfillment). TikTok Shop's logistics don't currently support that category, regardless of how good a fit the brand looks otherwise.
+Hard qualification rules — never propose a brand that fails any of these, regardless of how good a fit it looks otherwise:
+- No refrigerated or frozen goods: frozen meals, frozen baked goods, ice cream, or any product requiring cold-chain/refrigerated or frozen shipping and fulfillment. TikTok Shop's logistics don't currently support that category.
+- No CBD or cannabinoid products of any kind (CBD oils, gummies, topicals, THC/hemp-derived products).
+- Must have real US presence and sell to US customers. A Canada-based (or other non-US) brand only qualifies if it has clear US market activity (US warehouse/fulfillment, US-facing site/pricing in USD, or a meaningful US customer base) — Canada-only brands with no US activity are disqualified.
 
 Standing feedback from the admin that must shape every batch you generate:
 ${feedbackNotes.length > 0 ? feedbackNotes.map((n) => `- ${n}`).join("\n") : "(none yet)"}
@@ -192,7 +195,10 @@ The current brief keeps producing too few new, viable candidates (only ${usableC
 
 ${excludedSample.length > 0 ? `For reference, here are brand profiles the agency has already worked with or excluded (do NOT reference these exact companies by name in the rewritten brief — they're just examples of the kind of brand profile that's relevant): ${excludedSample.join(", ")}.` : ""}
 
-Hard qualification rule that the rewritten brief must never violate: frozen-food brands (frozen meals, frozen baked goods, ice cream, or anything requiring frozen shipping/fulfillment) are permanently off-limits — TikTok Shop's logistics don't support that category. Never broaden into it, even as an example of an adjacent category.
+Hard qualification rules that the rewritten brief must never violate — never broaden into any of these, even as an example of an adjacent category:
+- Refrigerated or frozen-good brands (frozen meals, frozen baked goods, ice cream, or anything requiring cold-chain/refrigerated or frozen shipping and fulfillment) are permanently off-limits — TikTok Shop's logistics don't support that category.
+- CBD or cannabinoid products of any kind are permanently off-limits.
+- US presence is required — never broaden into Canada-only or other non-US-only brands with no real US market activity.
 
 Call the propose_broadened_brief tool with the full rewritten brief text and a one-line summary of what changed.`;
 
