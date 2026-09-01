@@ -39,10 +39,12 @@ export async function generateFollowUpContent(emailId: string, feedbackNote?: st
 
   const isFinalTouch = email.sequenceStep >= settings.sequenceLength - 1;
 
-  const followUpStructure = `Follow-up structure: 20-30 words total, hard cap 35 — significantly shorter than the first touch, cut ruthlessly. Assume no response has come in yet. Add a new, more specific observation than the previous touch(es) in as few words as possible — never "just checking in," never re-explain the original pitch, no throat-clearing before the observation. Skip mechanical transitions like "since I reached out last week" or "following up on my last note" entirely — go straight into the new observation. At most one question mark in the entire body — never stack a category question and a separate CTA question. Get even shorter and more direct as the sequence progresses (this is touch #${email.sequenceStep}). Follow-ups don't need to end in a question every time — a plain observational statement that naturally invites a reply is fine, especially later in the sequence.${
+  const followUpStructure = `Follow-up structure: 20-30 words total, hard cap 35 — significantly shorter than the first touch, cut ruthlessly. Assume no response has come in yet. Ground the new observation in something specific to THIS company from the record (hero SKU, category detail, listing structure, TikTok Shop status) — not a generic nudge that could apply to any brand. Never "just checking in," never re-explain the original pitch, no throat-clearing before the observation. Skip mechanical transitions like "since I reached out last week" or "following up on my last note" entirely — go straight into the new observation. At most one question mark in the entire body — never stack a category question and a separate CTA question.
+
+The sequence escalates in urgency as it goes (this is touch #${email.sequenceStep} of ${settings.sequenceLength - 1} follow-ups) — each one a notch more direct about the Q4 window closing than the last, while staying observational, never pushy, never apologetic, no escape-hatch phrases like "no worries if not."${
     isFinalTouch
-      ? ` This is the LAST touch in the sequence — make it a clean, low-pressure close with no apology or escape-hatch phrase. Example of the right tone: "Is this still something you're weighing, or has it dropped off the radar?" Not: "no worries if not, just let me know."`
-      : ""
+      ? ` This is the LAST touch in the sequence — say so plainly, make clear this is the last note before you stop reaching out. Highest urgency in the sequence, framed around Q4 timing running out, but still no apology. Example of the right tone: "Last note from me on this — Q4 windows like this move fast. Still on your radar?" Not: "no worries if not, just let me know."`
+      : ` One step up in urgency from the first touch — Q4 is closer now than it was in that email, and this should read that way without spelling out "urgent."`
   }`;
 
   const systemPrompt = `You are drafting a follow-up outreach email for Dallas Global Agency's TikTok Shop brand-prospecting program.\n\n${CLAIMS_DISCIPLINE}\n\n${followUpStructure}\n\nStanding style feedback from the admin:\n${
@@ -72,7 +74,7 @@ ${daysSinceLastTouch !== null ? `It has been ${daysSinceLastTouch} day(s) since 
 ${feedbackNote ? `\nQuick note for this regeneration: ${feedbackNote}` : ""}
 ${variantHint ? `\nStanding personalization approach for this contact (variant ${variant}): ${variantHint}` : ""}
 
-Draft this follow-up. End with a brief closing only (e.g. "Best," or "Thanks,") — do not sign with a name or company, a signature block is appended automatically after your draft. Never sign off using the recipient's own name.`;
+Draft this follow-up. End with the closing "Looking forward to your response," — do not sign with a name or company, a signature block is appended automatically after your draft. Never sign off using the recipient's own name.`;
 
   const draft = await callDraftTool(systemPrompt, userPrompt);
 
