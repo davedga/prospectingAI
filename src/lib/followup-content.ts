@@ -38,14 +38,20 @@ export async function generateFollowUpContent(emailId: string, feedbackNote?: st
     variant === "A" ? settings.abVariantAHint : variant === "B" ? settings.abVariantBHint : null;
 
   const isFinalTouch = email.sequenceStep >= settings.sequenceLength - 1;
+  const isEconomicBuyer = email.contact.decisionRole === "Economic buyer";
 
-  const followUpStructure = `Follow-up structure: 20-30 words total, hard cap 35 — significantly shorter than the first touch, cut ruthlessly. Assume no response has come in yet. Ground the new observation in something specific to THIS company from the record (hero SKU, category detail, listing structure, TikTok Shop status) — not a generic nudge that could apply to any brand. Never "just checking in," never re-explain the original pitch, no throat-clearing before the observation. Skip mechanical transitions like "since I reached out last week" or "following up on my last note" entirely — go straight into the new observation. At most one question mark in the entire body — never stack a category question and a separate CTA question.
+  // Each touch has a distinct, mostly-fixed shape rather than one generic
+  // "escalate a bit more" instruction — locked in from line-by-line review.
+  const stepStructure =
+    email.sequenceStep === 1
+      ? `This is follow-up 1. Shape: open with "Curious what you think:" then one sentence tying a real category-level trend (something specific to their space performing on TikTok Shop, e.g. creator demos/UGC driving discovery) directly to their specific hero SKU or product — the two clauses should connect, not sit side by side. Close with one question: "${isEconomicBuyer ? "Is this something you've been considering ahead of Q4?" : "Is this something the team's exploring ahead of Q4?"}" Roughly 35-45 words.`
+      : isFinalTouch
+        ? `This is the LAST touch in the sequence. Shape: "Last note from me on this." followed by one question asking if there's someone else on the team better suited to talk to — a redirect ask, not a re-pitch. Do not re-ask about TikTok Shop status or repeat the pitch. Roughly 20-25 words, the shortest touch in the sequence. No apology, no escape-hatch phrase.`
+        : `This is follow-up 2 (not the last touch). Shape: open with a scarcity beat about the agency's own capacity closing out for the season ("we're finding the last few brands before we focus on Q4" — paraphrase naturally, don't copy verbatim), then one sentence naming the company and offering to share the scaling strategy on a call (never lay the strategy out in the email itself, only offer to share it live), then a concrete meeting ask for roughly 15 minutes sometime in the near future. Roughly 40-55 words.`;
 
-The sequence escalates in urgency as it goes (this is touch #${email.sequenceStep} of ${settings.sequenceLength - 1} follow-ups) — each one a notch more direct about the Q4 window closing than the last, while staying observational, never pushy, never apologetic, no escape-hatch phrases like "no worries if not."${
-    isFinalTouch
-      ? ` This is the LAST touch in the sequence — say so plainly, make clear this is the last note before you stop reaching out. Highest urgency in the sequence, framed around Q4 timing running out, but still no apology. Example of the right tone: "Last note from me on this — Q4 windows like this move fast. Still on your radar?" Not: "no worries if not, just let me know."`
-      : ` One step up in urgency from the first touch — Q4 is closer now than it was in that email, and this should read that way without spelling out "urgent."`
-  }`;
+  const followUpStructure = `Follow-up general rules: assume no response has come in yet. Ground everything in something specific to THIS company from the record (hero SKU, category detail, TikTok Shop status) — not a generic nudge that could apply to any brand. Never "just checking in," never re-explain the original pitch verbatim, no mechanical transitions like "since I reached out last week" or "following up on my last note." At most one question mark in the entire body.
+
+${stepStructure}`;
 
   const systemPrompt = `You are drafting a follow-up outreach email for Dallas Global Agency's TikTok Shop brand-prospecting program.\n\n${CLAIMS_DISCIPLINE}\n\n${followUpStructure}\n\nStanding style feedback from the admin:\n${
     draftingFeedback.length > 0
