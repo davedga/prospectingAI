@@ -38,16 +38,15 @@ export async function generateFollowUpContent(emailId: string, feedbackNote?: st
     variant === "A" ? settings.abVariantAHint : variant === "B" ? settings.abVariantBHint : null;
 
   const isFinalTouch = email.sequenceStep >= settings.sequenceLength - 1;
-  const isEconomicBuyer = email.contact.decisionRole === "Economic buyer";
 
   // Each touch has a distinct, mostly-fixed shape rather than one generic
   // "escalate a bit more" instruction — locked in from line-by-line review.
   const stepStructure =
     email.sequenceStep === 1
-      ? `This is follow-up 1. Shape: open with "Curious what you think:" then one sentence tying a real category-level trend (something specific to their space performing on TikTok Shop, e.g. creator demos/UGC driving discovery) directly to their specific hero SKU or product — the two clauses should connect, not sit side by side. Close with one question: "${isEconomicBuyer ? "Is this something you've been considering ahead of Q4?" : "Is this something the team's exploring ahead of Q4?"}" Roughly 35-45 words.`
+      ? `This is follow-up 1. Shape: open with a brief warm re-open ("I hope you're doing well!" or similar, one line). Then re-introduce context in one clause: "we work on behalf of TikTok to help identify and scale brands with strong potential to perform well on TikTok Shop" (paraphrase naturally). Then the GMV/track-record line: "for the right brands, we've seen it become a meaningful six and seven figure monthly revenue channel in a matter of months" (paraphrase naturally). Then offer to discuss the scaling strategy on a call (never lay the strategy out in the email itself, only offer to share it live) naming the company. Close with a concrete meeting ask naming two specific afternoon options (e.g. "this Wednesday or Thursday afternoon"). Roughly 70-90 words — this is the longest touch in the sequence since it re-establishes context.`
       : isFinalTouch
         ? `This is the LAST touch in the sequence. Shape: "Last note from me on this." followed by one question asking if there's someone else on the team better suited to talk to — a redirect ask, not a re-pitch. Do not re-ask about TikTok Shop status or repeat the pitch. Roughly 20-25 words, the shortest touch in the sequence. No apology, no escape-hatch phrase.`
-        : `This is follow-up 2 (not the last touch). Shape: open with a scarcity beat about the agency's own capacity closing out for the season ("we're finding the last few brands before we focus on Q4" — paraphrase naturally, don't copy verbatim), then one sentence naming the company and offering to share the scaling strategy on a call (never lay the strategy out in the email itself, only offer to share it live), then a concrete meeting ask for roughly 15 minutes sometime in the near future. Roughly 40-55 words.`;
+        : `This is follow-up 2 (not the last touch, and follow-up 1 already covered the context/strategy-share/meeting-ask — do NOT repeat that ground). Shape: a short scarcity beat about the agency finalizing which brands it's bringing on before focusing fully on Q4 (paraphrase naturally, don't copy verbatim), then reference the still-open meeting ask from follow-up 1 without re-explaining who you are or re-offering to share the strategy — just confirm the door's still open and nudge for a time. Roughly 25-35 words, noticeably shorter than follow-up 1.`;
 
   const followUpStructure = `Follow-up general rules: assume no response has come in yet. Ground everything in something specific to THIS company from the record (hero SKU, category detail, TikTok Shop status) — not a generic nudge that could apply to any brand. Never "just checking in," never re-explain the original pitch verbatim, no mechanical transitions like "since I reached out last week" or "following up on my last note." At most one question mark in the entire body.
 
@@ -80,7 +79,7 @@ ${daysSinceLastTouch !== null ? `It has been ${daysSinceLastTouch} day(s) since 
 ${feedbackNote ? `\nQuick note for this regeneration: ${feedbackNote}` : ""}
 ${variantHint ? `\nStanding personalization approach for this contact (variant ${variant}): ${variantHint}` : ""}
 
-Draft this follow-up. End with the closing "Looking forward to your response," — do not sign with a name or company, a signature block is appended automatically after your draft. Never sign off using the recipient's own name.`;
+Draft this follow-up. End with the closing "Best," — do not sign with a name or company, a signature block is appended automatically after your draft. Never sign off using the recipient's own name.`;
 
   const draft = await callDraftTool(systemPrompt, userPrompt);
 
