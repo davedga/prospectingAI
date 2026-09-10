@@ -21,6 +21,19 @@ const DRAFT_EMAIL_TOOL = {
   },
 };
 
+// Real, current research before drafting — without this the model can only
+// go on whatever's in the (often thin/unknown) company record plus its own
+// training knowledge, which has repeatedly produced wrong claims about a
+// prospect's actual TikTok Shop status (see: Wild Rye).
+const WEB_SEARCH_TOOL = {
+  type: "web_search_20250305" as const,
+  name: "web_search" as const,
+  max_uses: 3,
+};
+
+const RESEARCH_INSTRUCTION = `Research requirement — do this BEFORE calling draft_email, not instead of it:
+Use the web_search tool at least once to check the company's actual, current TikTok Shop status (e.g. search "[Company] TikTok Shop") — don't rely solely on the record below if its TikTok Shop status is thin/unknown, and don't rely on training knowledge, which can be stale. If a real monthly GMV or sales figure turns up, use it per the numbers rules. If you need a category-level or comparable-brand stat, one more search is fine (max 3 total). Once you've searched, call draft_email with your final draft — searching is not optional, but it also isn't the deliverable, don't stop after searching without drafting.`;
+
 export const CLAIMS_DISCIPLINE = `Voice: casual, conversational, informed, observational, concise. The email should feel like "I work in this space, I noticed something relevant about your brand or category, and was curious whether this is on your radar" — not a cold-sales pitch. Never pushy, apologetic, overly scripted, or prescriptive.
 
 Non-negotiable rules:
@@ -81,15 +94,18 @@ function getSeasonalFramingInstruction(now = new Date()): string {
 export async function callDraftTool(systemPrompt: string, userPrompt: string) {
   const message = await anthropic.messages.create({
     model: CLAUDE_MODEL,
-    max_tokens: 2000,
-    system: systemPrompt,
-    tools: [DRAFT_EMAIL_TOOL],
-    tool_choice: { type: "tool", name: "draft_email" },
+    max_tokens: 3000,
+    system: `${systemPrompt}\n\n${RESEARCH_INSTRUCTION}`,
+    tools: [WEB_SEARCH_TOOL, DRAFT_EMAIL_TOOL],
+    // Can't force draft_email immediately — that would block the model from
+    // searching first. "auto" lets it search, then draft; the system prompt
+    // above is what actually mandates the research step.
+    tool_choice: { type: "auto" },
     messages: [{ role: "user", content: userPrompt }],
   });
 
   const toolUse = message.content.find(
-    (block): block is Anthropic.ToolUseBlock => block.type === "tool_use"
+    (block): block is Anthropic.ToolUseBlock => block.type === "tool_use" && block.name === "draft_email"
   );
   if (!toolUse) throw new Error("Claude did not return a draft_email tool call.");
 
