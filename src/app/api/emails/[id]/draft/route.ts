@@ -3,6 +3,12 @@ import { prisma } from "@/lib/prisma";
 import { draftFirstEmail } from "@/lib/drafting";
 import { generateFollowUpContent } from "@/lib/followup-content";
 
+// Drafting now does up to 3 web_search round-trips before the model
+// returns a draft, which can comfortably exceed Vercel's default
+// serverless timeout — without this, calls fail with a client-side
+// "Failed to fetch" once the function gets killed mid-request.
+export const maxDuration = 60;
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
