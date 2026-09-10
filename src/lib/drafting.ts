@@ -138,6 +138,12 @@ export async function callDraftTool(systemPrompt: string, userPrompt: string) {
     });
 
     toolUse = findDraftToolUse(second.content);
+
+    if (!toolUse) {
+      throw new Error(
+        `Claude did not return a draft_email tool call. DIAG first_stop=${first.stop_reason} first_blocks=${JSON.stringify(first.content.map((b) => b.type))} second_stop=${second.stop_reason} second_blocks=${JSON.stringify(second.content.map((b) => b.type))} second_text=${JSON.stringify(second.content.filter((b) => b.type === "text"))}`
+      );
+    }
   }
 
   if (!toolUse) throw new Error("Claude did not return a draft_email tool call.");
