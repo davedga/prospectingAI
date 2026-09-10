@@ -91,22 +91,55 @@ function getSeasonalFramingInstruction(now = new Date()): string {
   return `Skip the Q4/Black Friday framing entirely — it's currently ${now.toLocaleString("en-US", { month: "long" })}, too far past that season to reference it naturally. Use a general "brands are adopting TikTok Shop this year" framing instead if a why-now beat is needed at all.`;
 }
 
+function findDraftToolUse(content: Anthropic.ContentBlock[]) {
+  return content.find(
+    (block): block is Anthropic.ToolUseBlock => block.type === "tool_use" && block.name === "draft_email"
+  );
+}
+
 export async function callDraftTool(systemPrompt: string, userPrompt: string) {
-  const message = await anthropic.messages.create({
+  const system = `${systemPrompt}\n\n${RESEARCH_INSTRUCTION}`;
+  const messages: Anthropic.MessageParam[] = [{ role: "user", content: userPrompt }];
+
+  const first = await anthropic.messages.create({
     model: CLAUDE_MODEL,
     max_tokens: 3000,
-    system: `${systemPrompt}\n\n${RESEARCH_INSTRUCTION}`,
+    system,
     tools: [WEB_SEARCH_TOOL, DRAFT_EMAIL_TOOL],
     // Can't force draft_email immediately — that would block the model from
     // searching first. "auto" lets it search, then draft; the system prompt
     // above is what actually mandates the research step.
     tool_choice: { type: "auto" },
-    messages: [{ role: "user", content: userPrompt }],
+    messages,
   });
 
-  const toolUse = message.content.find(
-    (block): block is Anthropic.ToolUseBlock => block.type === "tool_use" && block.name === "draft_email"
-  );
+  let toolUse = findDraftToolUse(first.content);
+
+  // "auto" sometimes lets the model stop after searching (or run out of
+  // max_tokens) without ever calling draft_email — the system prompt asks
+  // for it but doesn't guarantee it. Force a second turn, tool_choice
+  // pinned to draft_email, so it always finishes the job using whatever
+  // research it already gathered in the transcript above.
+  if (!toolUse) {
+    messages.push({ role: "assistant", content: first.content });
+    messages.push({
+      role: "user",
+      content:
+        "Call draft_email now with your final draft, based on whatever research is above.",
+    });
+
+    const second = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 3000,
+      system,
+      tools: [DRAFT_EMAIL_TOOL],
+      tool_choice: { type: "tool", name: "draft_email" },
+      messages,
+    });
+
+    toolUse = findDraftToolUse(second.content);
+  }
+
   if (!toolUse) throw new Error("Claude did not return a draft_email tool call.");
 
   return toolUse.input as { subject: string; body: string; claimsNotToMake: string };
