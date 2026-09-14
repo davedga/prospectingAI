@@ -183,21 +183,22 @@ export async function draftFirstEmail(
   const variantHint =
     variant === "A" ? settings.abVariantAHint : variant === "B" ? settings.abVariantBHint : null;
 
-  const firstTouchStructure = `First-touch structure, roughly 50-65 words total, hard cap 70. Fit these beats into that budget. Each beat below is its own paragraph in the body (see the paragraph-formatting rule above) — never stack two beats into one paragraph, and never let one beat's sentence sprawl to cover another beat's job:
+  const firstTouchStructure = `First-touch structure — this must match the finalized template exactly. Exactly THREE paragraphs after the greeting, nothing more:
 
-1. Who we are — one short clause, own paragraph, and its shape depends on whether you have a real GMV figure to cite later in this same email (see step 2):
-   - If you'll be citing a real, known monthly GMV figure for this prospect in step 2: keep this clause plain, no GMV claim — "I'm [name] - my team and I partner with TikTok to help identify and scale brands on TikTok Shop." (the specific number belongs in step 2/3, not duplicated here)
-   - If you won't have a specific number to cite (not on TikTok Shop, or on it but no known GMV figure): include the general aspirational claim — "I'm [name] - my team and I partner with TikTok to help identify and scale brands to six and seven-figure monthly GMV on TikTok Shop."
+1. Who we are — one short clause, own paragraph, and its shape depends on whether you have a real GMV figure to cite in step 2:
+   - If you'll be citing a real, known monthly GMV figure for this prospect in step 2: "I'm [name] - my team and I partner with TikTok to help identify and scale brands on TikTok Shop." (the specific number belongs in step 2, not duplicated here)
+   - If you won't have a specific number to cite (not on TikTok Shop, or on it but no known GMV figure): "I'm [name] - my team and I partner with TikTok to help identify and scale brands to six and seven-figure monthly GMV on TikTok Shop."
    Paraphrase naturally, don't copy verbatim every time. Don't spell out "DGA" here (it's implied by the sender's email/signature).
-2. Category + status, own paragraph, ONE plain sentence and nothing else: "Ahead of Q4, I've been looking closely at the [Category] category on the platform and noticed that [Company] [status]." ${getSeasonalFramingInstruction()} The status MUST match their actual TikTok Shop status (given below) — three real cases, never blur them:
-   - Not on TikTok Shop: "...noticed that [Company] isn't currently on Shop."
-   - Already on TikTok Shop, real GMV figure genuinely known/sourced: state it directly — "...noticed that [Company] is doing $X in monthly GMV on Shop." Never invent or round-estimate this figure.
-   - Already on TikTok Shop, no known GMV figure: keep it plain — "...noticed that [Company] is on Shop." Never say "already" or "live on," both read weak.
+2. Category + status, own paragraph, exactly ONE plain sentence, nothing else added to it: "Ahead of Q4, I've been looking closely at the [category] category and noticed [Company] [status]." Say "TikTok Shop" in full here (not the shorthand "Shop") — this is the one sentence that carries the actual status, so state it plainly. ${getSeasonalFramingInstruction()} The status MUST match their actual TikTok Shop status (given below) — three real cases, never blur them:
+   - Not on TikTok Shop: "...noticed [Company] isn't on TikTok Shop."
+   - Already on TikTok Shop, real GMV figure genuinely known/sourced: state it directly — "...noticed [Company] is doing $X in monthly GMV on TikTok Shop." Never invent or round-estimate this figure.
+   - Already on TikTok Shop, no known GMV figure: keep it plain — "...noticed [Company] is on TikTok Shop." Never say "already" or "live on," both read weak.
    - On TikTok Shop but status otherwise unclear/thin: keep it at the category level rather than guessing a status.
-   ("Shop" here is fine even though it's the first use of that specific word — "TikTok Shop" was already said in full in step 1's clause, so this is really the second mention in the email.)
-   Never default to "not on TikTok Shop" if the record shows otherwise — this has been wrong before when the record was thin instead of actually checked. Keep this sentence plain and short — do not stack in a hero SKU, retail presence, or any other specific detail here; that belongs in step 3, and only when it earns a place there.
-3. Optional — one extra sentence, own paragraph, used sparingly: a single real, specific detail about the brand (e.g. how a hero SKU fits the format). Include this mainly when step 2 landed on "not on TikTok Shop" or "on Shop, GMV unknown" — it gives the email something concrete beyond the category-level line. Skip it when step 2 already cited a real GMV figure — the number is already the specific detail, adding another is stacking. When you do include it, keep it to one clause about ONE detail — never pile on multiple facts (hero SKU plus retail presence plus press, etc.) in the same sentence.
-4. The ask, own paragraph — exactly one question from the question bank in the rules above, matched to which of the three cases in step 2 applied, and the only question mark in the email.`;
+   Never default to "not on TikTok Shop" if the record shows otherwise — this has been wrong before when the record was thin instead of actually checked. This sentence is the ONLY place anything brand-specific belongs in a first touch — do NOT add a hero SKU, retail presence, press, or any other specific detail anywhere in this email, first touch stays this simple every time. That kind of detail belongs in the follow-up sequence, not here.
+3. The ask, own paragraph, exactly one question, matched to which case applied in step 2 — and NEVER use "priority" in a first-touch question, that framing is reserved for later touches only:
+   - If a real GMV figure was cited in step 2: "Is scaling to six and seven-figure monthly GMV currently on [your/the team's] radar going into Q4?"
+   - Otherwise (not on TikTok Shop, or on it with GMV unknown): "Is scaling on TikTok Shop something [you've/the team's] explored going into Q4?" — or for variety, "Is scaling on TikTok Shop currently on [your/the team's] radar going into Q4?"
+   Use [your] for a senior/economic-buyer contact, [the team's] for a junior/operational contact. This is the only question mark in the email.`;
 
   const systemPrompt = `You are drafting outreach email copy for Dallas Global Agency's TikTok Shop brand-prospecting program.\n\n${CLAIMS_DISCIPLINE}\n\n${firstTouchStructure}\n\nStanding style feedback from the admin:\n${
     draftingFeedback.length > 0
