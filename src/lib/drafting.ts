@@ -189,16 +189,18 @@ export async function draftFirstEmail(
    - If you'll be citing a real, known monthly GMV figure for this prospect in step 2: "I'm [name] - my team and I partner with TikTok to help identify and scale brands on TikTok Shop." (the specific number belongs in step 2, not duplicated here)
    - If you won't have a specific number to cite (not on TikTok Shop, or on it but no known GMV figure): "I'm [name] - my team and I partner with TikTok to help identify and scale brands to six and seven-figure monthly GMV on TikTok Shop."
    Paraphrase naturally, don't copy verbatim every time. Don't spell out "DGA" here (it's implied by the sender's email/signature).
-2. Category + status, own paragraph, exactly ONE plain sentence, nothing else added to it: "Ahead of Q4, I've been looking closely at the [category] category and noticed [Company] [status]." Say "TikTok Shop" in full here (not the shorthand "Shop") — this is the one sentence that carries the actual status, so state it plainly. ${getSeasonalFramingInstruction()} The status MUST match their actual TikTok Shop status (given below) — three real cases, never blur them:
-   - Not on TikTok Shop: "...noticed [Company] isn't on TikTok Shop."
-   - Already on TikTok Shop, real GMV figure genuinely known/sourced: state it directly — "...noticed [Company] is doing $X in monthly GMV on TikTok Shop." Never invent or round-estimate this figure.
-   - Already on TikTok Shop, no known GMV figure: keep it plain — "...noticed [Company] is on TikTok Shop." Never say "already" or "live on," both read weak.
-   - On TikTok Shop but status otherwise unclear/thin: keep it at the category level rather than guessing a status.
+2. Category + status, own paragraph, exactly ONE plain sentence, nothing else added to it: "Ahead of Q4, I've been looking closely at the [category] category and noticed [Company] [status]." This is the SECOND mention of TikTok Shop in the email — say "the platform" here, not "TikTok Shop" and not "Shop" (see the mention-rotation rule below). ${getSeasonalFramingInstruction()} The status MUST match their actual TikTok Shop status (given below) — three real cases, never blur them:
+   - Not on TikTok Shop: "...noticed [Company] isn't on the platform."
+   - Already on TikTok Shop, real GMV figure genuinely known/sourced: state it directly — "...noticed [Company] is doing $X in monthly GMV on the platform." Never invent or round-estimate this figure.
+   - Already on TikTok Shop, no known GMV figure: keep it plain — "...noticed [Company] is on the platform." Never say "already" or "live on," both read weak.
+   - On the platform but status otherwise unclear/thin: keep it at the category level rather than guessing a status.
    Never default to "not on TikTok Shop" if the record shows otherwise — this has been wrong before when the record was thin instead of actually checked. This sentence is the ONLY place anything brand-specific belongs in a first touch — do NOT add a hero SKU, retail presence, press, or any other specific detail anywhere in this email, first touch stays this simple every time. That kind of detail belongs in the follow-up sequence, not here.
-3. The ask, own paragraph, exactly one question, matched to which case applied in step 2 — and NEVER use "priority" in a first-touch question, that framing is reserved for later touches only:
-   - If a real GMV figure was cited in step 2: "Is scaling to six and seven-figure monthly GMV currently on [your/the team's] radar going into Q4?"
-   - Otherwise (not on TikTok Shop, or on it with GMV unknown): "Is scaling on TikTok Shop something [you've/the team's] explored going into Q4?" — or for variety, "Is scaling on TikTok Shop currently on [your/the team's] radar going into Q4?"
-   Use [your] for a senior/economic-buyer contact, [the team's] for a junior/operational contact. This is the only question mark in the email.`;
+3. The ask, own paragraph, exactly one question, matched to which case applied in step 2 — and NEVER use "priority" in a first-touch question, that framing is reserved for later touches only. This is the THIRD mention — say "Shop" here (not "TikTok Shop," not "the platform"):
+   - If a real GMV figure was cited in step 2: "Is scaling to six and seven-figure monthly GMV currently on [your/the team's] radar going into Q4?" (no third mention needed in this variant — the GMV figure itself carries it)
+   - Otherwise (not on TikTok Shop, or on it with GMV unknown): "Is scaling on Shop something [you've/the team's] explored going into Q4?" — or for variety, "Is scaling on Shop currently on [your/the team's] radar going into Q4?"
+   Use [your] for a senior/economic-buyer contact, [the team's] for a junior/operational contact. This is the only question mark in the email.
+
+Mention-rotation rule for "TikTok Shop" across the email: 1st mention (step 1) = "TikTok Shop" in full, 2nd mention (step 2) = "the platform", 3rd mention if there is one (step 3) = "Shop". Never say "TikTok Shop" more than once in the same email.`;
 
   const systemPrompt = `You are drafting outreach email copy for Dallas Global Agency's TikTok Shop brand-prospecting program.\n\n${CLAIMS_DISCIPLINE}\n\n${firstTouchStructure}\n\nStanding style feedback from the admin:\n${
     draftingFeedback.length > 0
