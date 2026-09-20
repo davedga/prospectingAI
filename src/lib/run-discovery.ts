@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { generateDiscoveryBatch } from "@/lib/discovery";
 import { getExcludedBrandSample } from "@/lib/exclusions";
 import { createDeadline, type Deadline } from "@/lib/time-budget";
+import { normalizeDomain } from "@/lib/domain";
 
 export type RunDiscoveryBatchOptions = {
   // Hard cap — never create more than this many companies this run.
@@ -65,7 +66,7 @@ export async function runDiscoveryBatch(
   const maxAttempts = Math.max(1, options?.maxAttempts ?? (minCompanies > 0 ? 3 : 1));
   const deadline = options?.deadline ?? createDeadline(25_000);
 
-  const [excludedBrands, feedback] = await Promise.all([
+  const [excludedBrands, feedback, existingCompanies] = await Promise.all([
     prisma.excludedBrand.findMany({ select: { name: true } }),
     prisma.feedback.findMany({
       where: { scope: "discovery" },
@@ -73,11 +74,18 @@ export async function runDiscoveryBatch(
       take: 25,
       select: { note: true },
     }),
+    prisma.company.findMany({ select: { domain: true } }),
   ]);
 
   const feedbackNotes = feedback.map((f) => f.note);
   const seenNames = new Set(excludedBrands.map((b) => b.name.toLowerCase()));
   const excludedSample = maxAttempts > 1 ? await getExcludedBrandSample(25) : [];
+  // A company already in the table (any status) is a company we've already
+  // discovered/prospected/contacted under some record — re-proposing it
+  // just creates a duplicate row for the same real brand (see: 14 separate
+  // "Tushy" rows, several already emailed, that a later prospecting pass
+  // re-discovered and re-emailed without knowing they were the same brand).
+  const existingDomains = new Set(existingCompanies.map((c) => normalizeDomain(c.domain)));
 
   const discoveryRun = await prisma.discoveryRun.create({
     data: { prompt: brief },
@@ -105,13 +113,17 @@ export async function runDiscoveryBatch(
       feedbackNotes,
     });
 
-    const fresh = generated.filter((c) => !seenNames.has(c.name.toLowerCase()));
+    const fresh = generated.filter(
+      (c) =>
+        !seenNames.has(c.name.toLowerCase()) && !existingDomains.has(normalizeDomain(c.domain))
+    );
     if (fresh.length === 0) break; // Claude has nothing new to offer — stop early
 
     const batch = remainingBudget !== undefined ? fresh.slice(0, remainingBudget) : fresh;
 
     for (const candidate of batch) {
       seenNames.add(candidate.name.toLowerCase());
+      existingDomains.add(normalizeDomain(candidate.domain));
       const exclusion = matchExclusion(candidate.name, excludedBrands);
 
       const company = await prisma.company.create({

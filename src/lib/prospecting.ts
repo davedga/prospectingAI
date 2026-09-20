@@ -9,10 +9,48 @@ function classifyDecisionRole(title: string): string {
   return "Influencer/router";
 }
 
+// Company.domain has no DB-level uniqueness constraint, and Discovery has
+// historically created multiple rows for the same real brand (e.g. 14
+// separate "Tushy" rows, all hellotushy.com). Prospecting a duplicate
+// re-fetches the same real people from Apollo and re-emails them. Check
+// for a sibling row on the same domain that already has a sent email
+// before doing any Apollo work.
+async function findContactedDuplicate(domain: string, excludeCompanyId: string) {
+  const siblings = await prisma.company.findMany({
+    where: { id: { not: excludeCompanyId }, domain: { equals: domain, mode: "insensitive" } },
+    select: {
+      id: true,
+      name: true,
+      contacts: { select: { emails: { where: { status: "sent" }, select: { id: true }, take: 1 } } },
+    },
+  });
+  return siblings.find((c) => c.contacts.some((contact) => contact.emails.length > 0));
+}
+
 export async function prospectCompany(companyId: string) {
   const company = await prisma.company.findUniqueOrThrow({
     where: { id: companyId },
   });
+
+  const duplicate = await findContactedDuplicate(company.domain, companyId);
+  if (duplicate) {
+    await prisma.company.update({
+      where: { id: companyId },
+      data: { status: "rejected" },
+    });
+    await prisma.feedback.create({
+      data: {
+        scope: "prospecting",
+        companyId,
+        note: `Skipped — ${company.domain} already contacted under company "${duplicate.name}" (id ${duplicate.id}). Prospecting this duplicate would re-email the same real people.`,
+      },
+    });
+    return {
+      companyId,
+      contactsCreated: 0,
+      error: `Skipped — ${company.domain} already has outreach sent under another company record ("${duplicate.name}"). Marked rejected to avoid re-contacting the same people.`,
+    };
+  }
 
   await prisma.company.update({
     where: { id: companyId },
