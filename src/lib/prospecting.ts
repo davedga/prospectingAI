@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { searchOrganization, searchPeople, enrichPerson } from "@/lib/apollo";
+import { isRealDomain } from "@/lib/domain";
 
 function classifyDecisionRole(title: string): string {
   const t = title.toLowerCase();
@@ -16,6 +17,10 @@ function classifyDecisionRole(title: string): string {
 // for a sibling row on the same domain that already has a sent email
 // before doing any Apollo work.
 async function findContactedDuplicate(domain: string, excludeCompanyId: string) {
+  // A placeholder domain ("n/a", "skip", etc.) is never a real shared
+  // identity — treating it as one would flag unrelated companies as
+  // duplicates of each other.
+  if (!isRealDomain(domain)) return undefined;
   const siblings = await prisma.company.findMany({
     where: { id: { not: excludeCompanyId }, domain: { equals: domain, mode: "insensitive" } },
     select: {

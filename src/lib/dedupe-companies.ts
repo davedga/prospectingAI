@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import { normalizeDomain } from "@/lib/domain";
+import { normalizeDomain, isRealDomain } from "@/lib/domain";
 
 type CompanyForDedup = {
   id: string;
@@ -38,8 +38,8 @@ async function loadGroups() {
 
   const byDomain = new Map<string, CompanyForDedup[]>();
   for (const c of companies) {
+    if (!isRealDomain(c.domain)) continue;
     const key = normalizeDomain(c.domain);
-    if (!key) continue;
     const entry: CompanyForDedup = {
       id: c.id,
       name: c.name,

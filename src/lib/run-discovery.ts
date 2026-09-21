@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { generateDiscoveryBatch } from "@/lib/discovery";
 import { getExcludedBrandSample } from "@/lib/exclusions";
 import { createDeadline, type Deadline } from "@/lib/time-budget";
-import { normalizeDomain } from "@/lib/domain";
+import { normalizeDomain, isRealDomain } from "@/lib/domain";
 
 export type RunDiscoveryBatchOptions = {
   // Hard cap — never create more than this many companies this run.
@@ -85,7 +85,9 @@ export async function runDiscoveryBatch(
   // just creates a duplicate row for the same real brand (see: 14 separate
   // "Tushy" rows, several already emailed, that a later prospecting pass
   // re-discovered and re-emailed without knowing they were the same brand).
-  const existingDomains = new Set(existingCompanies.map((c) => normalizeDomain(c.domain)));
+  const existingDomains = new Set(
+    existingCompanies.filter((c) => isRealDomain(c.domain)).map((c) => normalizeDomain(c.domain))
+  );
 
   const discoveryRun = await prisma.discoveryRun.create({
     data: { prompt: brief },
@@ -115,7 +117,8 @@ export async function runDiscoveryBatch(
 
     const fresh = generated.filter(
       (c) =>
-        !seenNames.has(c.name.toLowerCase()) && !existingDomains.has(normalizeDomain(c.domain))
+        !seenNames.has(c.name.toLowerCase()) &&
+        (!isRealDomain(c.domain) || !existingDomains.has(normalizeDomain(c.domain)))
     );
     if (fresh.length === 0) break; // Claude has nothing new to offer — stop early
 
@@ -123,7 +126,7 @@ export async function runDiscoveryBatch(
 
     for (const candidate of batch) {
       seenNames.add(candidate.name.toLowerCase());
-      existingDomains.add(normalizeDomain(candidate.domain));
+      if (isRealDomain(candidate.domain)) existingDomains.add(normalizeDomain(candidate.domain));
       const exclusion = matchExclusion(candidate.name, excludedBrands);
 
       const company = await prisma.company.create({
