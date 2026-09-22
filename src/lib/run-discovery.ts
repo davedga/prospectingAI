@@ -3,6 +3,7 @@ import { generateDiscoveryBatch } from "@/lib/discovery";
 import { getExcludedBrandSample } from "@/lib/exclusions";
 import { createDeadline, type Deadline } from "@/lib/time-budget";
 import { normalizeDomain, isRealDomain } from "@/lib/domain";
+import { findExcludedBrandMatch } from "@/lib/brand-match";
 
 export type RunDiscoveryBatchOptions = {
   // Hard cap — never create more than this many companies this run.
@@ -39,21 +40,22 @@ This is retry attempt ${attempt} for this batch — the prior attempt(s) didn't 
 }
 
 // In-memory version of exclusions.ts's checkExclusion — avoids a fresh
-// full-table query (6.5k+ rows) per candidate when we've already loaded
-// the list once for this batch.
+// full-table query (8k+ rows) per candidate when we've already loaded
+// the list once for this batch. Fuzzy (not just substring) so a candidate
+// that's the same brand under a slightly different name/formatting still
+// gets caught — see brand-match.ts.
 function matchExclusion(
   name: string,
+  domain: string | null | undefined,
   excludedBrands: { name: string }[]
 ): { isExcluded: boolean; matchedName?: string } {
-  const normalized = name.trim().toLowerCase();
-  if (!normalized) return { isExcluded: false };
-  for (const brand of excludedBrands) {
-    const brandNormalized = brand.name.trim().toLowerCase();
-    if (normalized.includes(brandNormalized) || brandNormalized.includes(normalized)) {
-      return { isExcluded: true, matchedName: brand.name };
-    }
-  }
-  return { isExcluded: false };
+  if (!name.trim()) return { isExcluded: false };
+  const match = findExcludedBrandMatch(
+    name,
+    domain,
+    excludedBrands.map((b) => b.name)
+  );
+  return match.matched ? { isExcluded: true, matchedName: match.matchedName } : { isExcluded: false };
 }
 
 export async function runDiscoveryBatch(
@@ -127,7 +129,7 @@ export async function runDiscoveryBatch(
     for (const candidate of batch) {
       seenNames.add(candidate.name.toLowerCase());
       if (isRealDomain(candidate.domain)) existingDomains.add(normalizeDomain(candidate.domain));
-      const exclusion = matchExclusion(candidate.name, excludedBrands);
+      const exclusion = matchExclusion(candidate.name, candidate.domain, excludedBrands);
 
       const company = await prisma.company.create({
         data: {

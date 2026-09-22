@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { searchOrganization, searchPeople, enrichPerson } from "@/lib/apollo";
 import { isRealDomain } from "@/lib/domain";
+import { findExcludedBrandMatch } from "@/lib/brand-match";
 
 function classifyDecisionRole(title: string): string {
   const t = title.toLowerCase();
@@ -36,6 +37,31 @@ export async function prospectCompany(companyId: string) {
   const company = await prisma.company.findUniqueOrThrow({
     where: { id: companyId },
   });
+
+  const excludedBrands = await prisma.excludedBrand.findMany({ select: { name: true } });
+  const brandMatch = findExcludedBrandMatch(
+    company.name,
+    company.domain,
+    excludedBrands.map((b) => b.name)
+  );
+  if (brandMatch.matched) {
+    await prisma.company.update({
+      where: { id: companyId },
+      data: { status: "rejected" },
+    });
+    await prisma.feedback.create({
+      data: {
+        scope: "prospecting",
+        companyId,
+        note: `Skipped — "${company.name}" matches excluded brand "${brandMatch.matchedName}" (similarity ${brandMatch.score}). Never contact this brand.`,
+      },
+    });
+    return {
+      companyId,
+      contactsCreated: 0,
+      error: `Skipped — matches excluded brand "${brandMatch.matchedName}". Marked rejected.`,
+    };
+  }
 
   const duplicate = await findContactedDuplicate(company.domain, companyId);
   if (duplicate) {

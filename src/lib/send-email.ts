@@ -4,6 +4,7 @@ import { resolveThreadIdFromMessageId } from "@/lib/gmail-replies";
 import { scheduleNextFollowUp } from "@/lib/followups";
 import { getSettings } from "@/lib/settings";
 import { bodyToHtml } from "@/lib/email-html";
+import { findExcludedBrandMatch } from "@/lib/brand-match";
 import type { Prisma } from "@/generated/prisma/client";
 
 type EmailWithContact = Prisma.EmailGetPayload<{
@@ -13,6 +14,23 @@ type EmailWithContact = Prisma.EmailGetPayload<{
 export async function sendEmailAndAdvanceSequence(email: EmailWithContact) {
   if (!email.contact.email) {
     return { ok: false as const, error: "Contact has no email address." };
+  }
+
+  // Final safety net, independent of whatever gate the company passed (or
+  // slipped past) earlier in the pipeline — never let an ExcludedBrand
+  // match reach an actual send.
+  const excludedBrands = await prisma.excludedBrand.findMany({ select: { name: true } });
+  const brandMatch = findExcludedBrandMatch(
+    email.contact.company.name,
+    email.contact.company.domain,
+    excludedBrands.map((b) => b.name)
+  );
+  if (brandMatch.matched) {
+    await prisma.company.update({ where: { id: email.contact.companyId }, data: { status: "rejected" } });
+    return {
+      ok: false as const,
+      error: `Blocked — "${email.contact.company.name}" matches excluded brand "${brandMatch.matchedName}". Never contact this brand.`,
+    };
   }
 
   const settings = await getSettings();
