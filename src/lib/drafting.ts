@@ -186,9 +186,9 @@ export async function draftFirstEmail(
   const firstTouchStructure = `First-touch structure — this must match the finalized template exactly. Exactly THREE paragraphs after the greeting, nothing more:
 
 1. Who we are — one short clause, own paragraph, and its shape depends on whether you have a real GMV figure to cite in step 2:
-   - If you'll be citing a real, known monthly GMV figure for this prospect in step 2: "I'm [name] - my team and I partner with TikTok to help identify and scale brands on TikTok Shop." (the specific number belongs in step 2, not duplicated here)
-   - If you won't have a specific number to cite (not on TikTok Shop, or on it but no known GMV figure): "I'm [name] - my team and I partner with TikTok to help identify and scale brands to six and seven-figure monthly GMV on TikTok Shop."
-   Paraphrase naturally, don't copy verbatim every time. Don't spell out "DGA" here (it's implied by the sender's email/signature).
+   - If you'll be citing a real, known monthly GMV figure for this prospect in step 2: "I'm David - my team and I partner with TikTok to help identify and scale brands on TikTok Shop." (the specific number belongs in step 2, not duplicated here)
+   - If you won't have a specific number to cite (not on TikTok Shop, or on it but no known GMV figure): "I'm David - my team and I partner with TikTok to help identify and scale brands to six and seven-figure monthly GMV on TikTok Shop."
+   Always "David" — never a different or invented name, it must match the sender's real name in the signature below. Paraphrase the rest of the sentence naturally, don't copy verbatim every time. Don't spell out "DGA" here (it's implied by the sender's email/signature).
 2. Category + status, own paragraph, exactly ONE plain sentence, nothing else added to it: "Ahead of Q4, I've been looking closely at the [category] category and noticed [Company] [status]." This is the SECOND mention of TikTok Shop in the email — say "the platform" here, not "TikTok Shop" and not "Shop" (see the mention-rotation rule below). ${getSeasonalFramingInstruction()} The status MUST match their actual TikTok Shop status (given below) — three real cases, never blur them:
    - Not on TikTok Shop: "...noticed [Company] isn't on the platform."
    - Already on TikTok Shop, real GMV figure genuinely known/sourced: state it directly — "...noticed [Company] is doing $X in monthly GMV on the platform." Never invent or round-estimate this figure.
