@@ -268,7 +268,51 @@ export async function GET() {
     }
   }
 
+  // --- recent-N slice (sentEmails is already ordered sentAt desc) ---
+  // For checking whether performance/quality held up since a specific
+  // change (template fixes, targeting logic, etc.) without conflating it
+  // with the full history.
+  const RECENT_N = 120;
+  const recentEmails = sentEmails.slice(0, RECENT_N);
+
+  const recentByRole: Record<string, typeof sentEmails> = {};
+  for (const e of recentEmails) {
+    const key = e.contact.decisionRole || "Unknown";
+    (recentByRole[key] ??= []).push(e);
+  }
+  const recentByTitle: Record<string, typeof sentEmails> = {};
+  for (const e of recentEmails) {
+    const key = titleBucket(e.contact.title);
+    (recentByTitle[key] ??= []).push(e);
+  }
+
+  let recentUnder60s = 0;
+  let recentOpenConsidered = 0;
+  for (const e of recentEmails) {
+    if (!e.sentAt || !e.openedAt) continue;
+    recentOpenConsidered += 1;
+    if (e.openedAt.getTime() - e.sentAt.getTime() < 60_000) recentUnder60s += 1;
+  }
+
+  const recent = {
+    n: recentEmails.length,
+    oldestSentAt: recentEmails[recentEmails.length - 1]?.sentAt ?? null,
+    newestSentAt: recentEmails[0]?.sentAt ?? null,
+    totals: { ...summarize(recentEmails), ...summarizeGenuine(recentEmails) },
+    byRole: Object.entries(recentByRole)
+      .map(([role, rows]) => ({ role, ...summarize(rows), ...summarizeGenuine(rows) }))
+      .sort((a, b) => b.genuineOpenRate - a.genuineOpenRate),
+    byTitle: Object.entries(recentByTitle)
+      .map(([bucket, rows]) => ({ bucket, ...summarize(rows), ...summarizeGenuine(rows) }))
+      .sort((a, b) => b.genuineOpenRate - a.genuineOpenRate),
+    timingUnder60sRate: recentOpenConsidered
+      ? Math.round((recentUnder60s / recentOpenConsidered) * 1000) / 10
+      : 0,
+    timingConsidered: recentOpenConsidered,
+  };
+
   return NextResponse.json({
+    recent,
     totals: summarizeGenuine(sentEmails),
     decisionRoleStats,
     titleBucketStats,
