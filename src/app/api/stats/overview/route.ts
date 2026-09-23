@@ -45,13 +45,21 @@ function isGenuineOpen(e: { sentAt: Date | null; openedAt: Date | null }): boole
   return e.openedAt.getTime() - e.sentAt.getTime() >= 60_000;
 }
 
-function summarizeGenuine(rows: { sentAt: Date | null; openedAt: Date | null }[]) {
+function summarizeGenuine(rows: { sentAt: Date | null; openedAt: Date | null; openCount: number }[]) {
   const sent = rows.length;
-  const opened = rows.filter(isGenuineOpen).length;
+  const genuineRows = rows.filter(isGenuineOpen);
+  const opened = genuineRows.length;
+  // Only a proxy — we only store the FIRST open's timestamp, not each
+  // individual one — but a second (or later) open on a row whose first
+  // open already cleared the 60s bot-window is the closest read of real
+  // repeat engagement the current data supports.
+  const multiOpened = genuineRows.filter((r) => r.openCount >= 2).length;
   return {
     sent,
     genuineOpened: opened,
     genuineOpenRate: sent ? Math.round((opened / sent) * 1000) / 10 : 0,
+    genuineMultiOpened: multiOpened,
+    genuineMultiOpenRate: sent ? Math.round((multiOpened / sent) * 1000) / 10 : 0,
   };
 }
 
@@ -110,8 +118,12 @@ export async function GET() {
     const key = e.contact.company.priority || "Unknown";
     (byPriority[key] ??= []).push(e);
   }
+  // Corrected-only — raw openRate/multiOpenRate is dominated by Gmail's
+  // image-proxy pre-fetch noise (see summarizeGenuine above) and was
+  // dropped here at the admin's request rather than reported alongside
+  // the real number.
   const priorityStats = Object.entries(byPriority)
-    .map(([priority, rows]) => ({ priority, ...summarize(rows), ...summarizeGenuine(rows) }))
+    .map(([priority, rows]) => ({ priority, ...summarizeGenuine(rows) }))
     .sort((a, b) => b.genuineOpenRate - a.genuineOpenRate);
 
   // --- by company archetype ---
@@ -271,7 +283,7 @@ export async function GET() {
   }
 
   return NextResponse.json({
-    totals: { ...summarize(sentEmails), ...summarizeGenuine(sentEmails) },
+    totals: summarizeGenuine(sentEmails),
     decisionRoleStats,
     titleBucketStats,
     priorityStats,
