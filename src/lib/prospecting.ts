@@ -131,6 +131,22 @@ export async function prospectCompany(companyId: string) {
     const people = await searchPeople(org.id);
     const topCandidates = people.slice(0, 8);
 
+    // prospectCompany() used to create a fresh Contact row every time it
+    // ran against a company, with no check against contacts that already
+    // exist — a company re-entering "selected" (a stuck automation run, a
+    // manual re-prospect) would silently create duplicate rows for the
+    // exact same real people, each independently selectable/sendable.
+    // Confirmed in production at real scale (one company had ~18 duplicate
+    // rows for its own CEO). Load existing emails once and skip anyone
+    // already on file.
+    const existingContacts = await prisma.contact.findMany({
+      where: { companyId, email: { not: null } },
+      select: { email: true },
+    });
+    const existingEmails = new Set(
+      existingContacts.map((c) => c.email!.trim().toLowerCase())
+    );
+
     let contactsCreated = 0;
     for (const candidate of topCandidates) {
       const enriched = await enrichPerson({
@@ -143,6 +159,10 @@ export async function prospectCompany(companyId: string) {
       const name =
         person.name ?? [person.first_name, person.last_name].filter(Boolean).join(" ");
       if (!name || !person.title) continue;
+
+      if (person.email && existingEmails.has(person.email.trim().toLowerCase())) {
+        continue;
+      }
 
       await prisma.contact.create({
         data: {
@@ -161,6 +181,7 @@ export async function prospectCompany(companyId: string) {
           apolloId: person.id,
         },
       });
+      if (person.email) existingEmails.add(person.email.trim().toLowerCase());
       contactsCreated += 1;
     }
 
