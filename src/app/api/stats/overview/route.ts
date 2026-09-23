@@ -33,6 +33,28 @@ function summarize(rows: { openCount: number }[]) {
   };
 }
 
+// Raw openCount is dominated by near-instant automated pixel-fetches
+// (Gmail's own image proxy warms/caches every external image shortly
+// after send, regardless of whether any human ever opens the message —
+// confirmed here by ~87% of opens landing within 60s, uniformly across
+// unrelated recipient domains). "genuineOpened" excludes anything whose
+// FIRST open landed inside that 60s window as bot-likely, so this is a
+// much more honest (if still conservative) read of real engagement.
+function isGenuineOpen(e: { sentAt: Date | null; openedAt: Date | null }): boolean {
+  if (!e.sentAt || !e.openedAt) return false;
+  return e.openedAt.getTime() - e.sentAt.getTime() >= 60_000;
+}
+
+function summarizeGenuine(rows: { sentAt: Date | null; openedAt: Date | null }[]) {
+  const sent = rows.length;
+  const opened = rows.filter(isGenuineOpen).length;
+  return {
+    sent,
+    genuineOpened: opened,
+    genuineOpenRate: sent ? Math.round((opened / sent) * 1000) / 10 : 0,
+  };
+}
+
 export async function GET() {
   const sentEmails = await prisma.email.findMany({
     where: { status: "sent" },
@@ -69,8 +91,8 @@ export async function GET() {
     (byDecisionRole[key] ??= []).push(e);
   }
   const decisionRoleStats = Object.entries(byDecisionRole)
-    .map(([role, rows]) => ({ role, ...summarize(rows) }))
-    .sort((a, b) => b.openRate - a.openRate);
+    .map(([role, rows]) => ({ role, ...summarize(rows), ...summarizeGenuine(rows) }))
+    .sort((a, b) => b.genuineOpenRate - a.genuineOpenRate);
 
   // --- by finer title bucket ---
   const byTitleBucket: Record<string, typeof sentEmails> = {};
@@ -79,8 +101,8 @@ export async function GET() {
     (byTitleBucket[key] ??= []).push(e);
   }
   const titleBucketStats = Object.entries(byTitleBucket)
-    .map(([bucket, rows]) => ({ bucket, ...summarize(rows) }))
-    .sort((a, b) => b.openRate - a.openRate);
+    .map(([bucket, rows]) => ({ bucket, ...summarize(rows), ...summarizeGenuine(rows) }))
+    .sort((a, b) => b.genuineOpenRate - a.genuineOpenRate);
 
   // --- by company priority tier ---
   const byPriority: Record<string, typeof sentEmails> = {};
@@ -89,8 +111,8 @@ export async function GET() {
     (byPriority[key] ??= []).push(e);
   }
   const priorityStats = Object.entries(byPriority)
-    .map(([priority, rows]) => ({ priority, ...summarize(rows) }))
-    .sort((a, b) => b.openRate - a.openRate);
+    .map(([priority, rows]) => ({ priority, ...summarize(rows), ...summarizeGenuine(rows) }))
+    .sort((a, b) => b.genuineOpenRate - a.genuineOpenRate);
 
   // --- by company archetype ---
   const byArchetype: Record<string, typeof sentEmails> = {};
@@ -99,8 +121,8 @@ export async function GET() {
     (byArchetype[key] ??= []).push(e);
   }
   const archetypeStats = Object.entries(byArchetype)
-    .map(([archetype, rows]) => ({ archetype, ...summarize(rows) }))
-    .sort((a, b) => b.openRate - a.openRate);
+    .map(([archetype, rows]) => ({ archetype, ...summarize(rows), ...summarizeGenuine(rows) }))
+    .sort((a, b) => b.genuineOpenRate - a.genuineOpenRate);
 
   // --- per company (which companies are opening, incl. multi-POC opens) ---
   const byCompany: Record<
@@ -249,7 +271,7 @@ export async function GET() {
   }
 
   return NextResponse.json({
-    totals: summarize(sentEmails),
+    totals: { ...summarize(sentEmails), ...summarizeGenuine(sentEmails) },
     decisionRoleStats,
     titleBucketStats,
     priorityStats,
