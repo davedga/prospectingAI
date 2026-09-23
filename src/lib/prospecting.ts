@@ -38,6 +38,29 @@ export async function prospectCompany(companyId: string) {
     where: { id: companyId },
   });
 
+  // "Low" priority companies genuinely underperform (1.8% corrected open
+  // rate vs. 7.8-13.6% for every other tier, confirmed against bot-filtered
+  // engagement data) — skip the Apollo spend on them entirely rather than
+  // just letting them sit lower in the queue.
+  if (company.priority === "Low") {
+    await prisma.company.update({
+      where: { id: companyId },
+      data: { status: "rejected" },
+    });
+    await prisma.feedback.create({
+      data: {
+        scope: "prospecting",
+        companyId,
+        note: `Skipped — "${company.name}" is Low priority. Low-priority companies showed a 1.8% genuine open rate vs. 7.8-13.6% for every other tier, so they're excluded from the active queue.`,
+      },
+    });
+    return {
+      companyId,
+      contactsCreated: 0,
+      error: "Skipped — Low priority. Marked rejected.",
+    };
+  }
+
   const excludedBrands = await prisma.excludedBrand.findMany({ select: { name: true } });
   const brandMatch = findExcludedBrandMatch(
     company.name,

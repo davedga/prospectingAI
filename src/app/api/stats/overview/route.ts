@@ -1,22 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { titleBucket } from "@/lib/title-bucket";
 
 export const maxDuration = 30;
-
-// Bucket a raw Apollo/Discovery title into a coarse role group for
-// reporting — decisionRole already exists but only has 4 buckets and
-// collapses distinctions (e.g. CEO vs. VP) the admin asked about directly.
-function titleBucket(title: string): string {
-  const t = title.toLowerCase();
-  if (/\b(ceo|founder|co-founder|president|owner)\b/.test(t)) return "Founder/CEO/Owner";
-  if (/\bcoo\b/.test(t)) return "COO";
-  if (/\bcmo\b/.test(t)) return "CMO";
-  if (/\b(vp|vice president)\b/.test(t)) return "VP";
-  if (/\bhead of\b/.test(t)) return "Head of [dept]";
-  if (/\bdirector\b/.test(t)) return "Director";
-  if (/\bmanager\b/.test(t)) return "Manager";
-  return "Other/Individual contributor";
-}
 
 function summarize(rows: { openCount: number }[]) {
   const sent = rows.length;
