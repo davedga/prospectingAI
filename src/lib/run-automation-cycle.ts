@@ -8,13 +8,20 @@ import { isWithinSendWindow } from "@/lib/send-window";
 import { createDeadline } from "@/lib/time-budget";
 import { checkThreadForReply, resolveThreadIdFromMessageId } from "@/lib/gmail-replies";
 
-const FOLLOWUP_CONCURRENCY = 5;
+const FOLLOWUP_CONCURRENCY = 8;
 // Vercel Hobby's maxDuration ceiling is 60s, but the real constraint is
 // whatever external scheduler is calling this endpoint — most (including
 // cron-job.org's free tier) time out client-side well before 60s. Staying
 // well under that so the response reliably comes back and the scheduler
 // records a real success/failure instead of a client-side timeout.
 const CYCLE_BUDGET_MS = 25_000;
+// The pre-send Gmail reply-check scales with the size of the pending
+// follow-up backlog: with a few hundred pending, checking every one at
+// once eats the whole cycle budget, the shared deadline expires, and the
+// send loop below never runs — so a large backlog would never drain. Give
+// the reply-check its own hard sub-budget so the majority of the cycle is
+// always left for actually sending; unchecked contacts roll to the next run.
+const REPLY_CHECK_BUDGET_MS = 6_000;
 
 export type FollowUpResult = {
   emailId: string;
@@ -42,6 +49,10 @@ export async function runAutomationCycle(
   // everything after it — each stage bails cleanly once time is up
   // instead of risking a hard kill mid-write.
   const deadline = createDeadline(CYCLE_BUDGET_MS);
+  // Separate, shorter budget for the pre-send reply-check phase only, so it
+  // can't consume the whole cycle and starve the send loop when the pending
+  // follow-up backlog is large. Contacts it doesn't reach roll to next run.
+  const replyCheckDeadline = createDeadline(REPLY_CHECK_BUDGET_MS);
 
   const pipelineSummary = await runAutomatedPipeline(deadline).catch((error) => {
     console.error("Automated pipeline run failed", error);
@@ -88,7 +99,7 @@ export async function runAutomationCycle(
       });
 
   for (let i = 0; i < contactsToCheck.length; i += FOLLOWUP_CONCURRENCY) {
-    if (deadline.expired()) break;
+    if (replyCheckDeadline.expired() || deadline.expired()) break;
     const chunk = contactsToCheck.slice(i, i + FOLLOWUP_CONCURRENCY);
     await Promise.all(
       chunk.map(async (contact) => {
