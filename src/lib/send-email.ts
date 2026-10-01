@@ -5,6 +5,7 @@ import { scheduleNextFollowUp } from "@/lib/followups";
 import { getSettings } from "@/lib/settings";
 import { bodyToHtml } from "@/lib/email-html";
 import { findExcludedBrandMatch } from "@/lib/brand-match";
+import { isReprospectCompany } from "@/lib/reprospect";
 import type { Prisma } from "@/generated/prisma/client";
 
 type EmailWithContact = Prisma.EmailGetPayload<{
@@ -18,8 +19,12 @@ export async function sendEmailAndAdvanceSequence(email: EmailWithContact) {
 
   // Final safety net, independent of whatever gate the company passed (or
   // slipped past) earlier in the pipeline — never let an ExcludedBrand
-  // match reach an actual send.
-  const excludedBrands = await prisma.excludedBrand.findMany({ select: { name: true } });
+  // match reach an actual send. The one deliberate exception is a
+  // re-prospect: those brands are on the list by definition and were
+  // imported on purpose (see src/lib/reprospect.ts).
+  const excludedBrands = (await isReprospectCompany(email.contact.company))
+    ? []
+    : await prisma.excludedBrand.findMany({ select: { name: true } });
   const brandMatch = findExcludedBrandMatch(
     email.contact.company.name,
     email.contact.company.domain,

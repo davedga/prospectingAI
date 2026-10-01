@@ -14,6 +14,12 @@ import {
 } from "@/lib/daily-limits";
 import { isWithinSendWindow } from "@/lib/send-window";
 import { createDeadline, type Deadline } from "@/lib/time-budget";
+import {
+  getDailyReprospectLimit,
+  notReprospectCompanyWhere,
+  reprospectCompanyWhere,
+} from "@/lib/reprospect";
+import type { Prisma } from "@/generated/prisma/client";
 
 const DRAFT_SEND_CONCURRENCY = 5;
 const BRIEF_AUTO_TUNE_COOLDOWN_MS = 20 * 60 * 60 * 1000; // ~20h, roughly once/day
@@ -38,6 +44,8 @@ export type AutoPipelineSummary = {
   sendErrors: number;
   sendSkippedOutsideWindow: number;
   sendSkippedLimitReached: number;
+  reprospectDrafted: number;
+  reprospectSent: number;
   timeBudgetExhausted: boolean;
 };
 
@@ -73,6 +81,8 @@ export async function runAutomatedPipeline(
     sendErrors: 0,
     sendSkippedOutsideWindow: 0,
     sendSkippedLimitReached: 0,
+    reprospectDrafted: 0,
+    reprospectSent: 0,
     timeBudgetExhausted: false,
   };
 
@@ -191,102 +201,151 @@ export async function runAutomatedPipeline(
   // 3. Auto-draft first emails for selected contacts that don't have one
   // yet, and auto-send immediately if auto-approve resulted in "approved"
   // — but only within the configured send window, and capped at the
-  // remaining daily first-email budget. Processed in small concurrent
-  // batches (each draft+send is a couple of network round-trips) so more
-  // fits inside a single serverless invocation.
+  // remaining daily first-email budget. Net-new leads and re-prospects
+  // (src/lib/reprospect.ts) run the same flow on separate budgets.
+  // Re-prospects go first: their drafting is capped at what can send today,
+  // so they take a bounded slice of the time budget, whereas the net-new
+  // stage drafts its whole backlog and could otherwise starve them.
   if (settings.autoDraftFirstEmails) {
-    const sentToday = await getFirstEmailsSentTodayCount(settings.sendTimezone);
-    let remainingSends = settings.dailyFirstEmailLimit - sentToday;
     const withinWindow = isWithinSendWindow(settings);
 
-    // 3a. Flush anything already drafted+approved from a PRIOR run that
-    // never actually sent (window was closed, budget was hit, etc.) —
-    // without this, an approved-but-unsent email is invisible to the
-    // "needsDraft" query below forever, since that query only looks for
-    // contacts with zero first-touch emails at all.
-    if (withinWindow && remainingSends > 0) {
-      const pendingApproved = await prisma.email.findMany({
-        where: { status: "approved", sequenceStep: 0 },
-        include: { contact: { include: { company: true } } },
-      });
+    const reprospectSentToday = await getFirstEmailsSentTodayCount(settings.sendTimezone, "reprospect");
+    await draftAndSendFirstTouches({
+      companyWhere: reprospectCompanyWhere,
+      remainingSends: getDailyReprospectLimit() - reprospectSentToday,
+      withinWindow,
+      deadline,
+      summary,
+      counters: { drafted: "reprospectDrafted", sent: "reprospectSent", flushed: "reprospectSent" },
+      // Imported in score order, so oldest-created = highest priority. Only
+      // draft what can actually go out today — the re-prospect pool is large
+      // and a draft that sits for days goes stale.
+      orderByCreatedAt: true,
+      draftOnlyWhatCanSend: true,
+    });
 
-      for (let i = 0; i < pendingApproved.length; i += DRAFT_SEND_CONCURRENCY) {
-        if (deadline.expired() || remainingSends <= 0) {
-          if (deadline.expired()) summary.timeBudgetExhausted = true;
-          break;
-        }
-        const chunk = pendingApproved.slice(i, i + DRAFT_SEND_CONCURRENCY);
-        await Promise.all(
-          chunk.map(async (email) => {
-            if (remainingSends <= 0) {
-              summary.sendSkippedLimitReached += 1;
-              return;
-            }
-            remainingSends -= 1;
-            try {
-              const result = await sendEmailAndAdvanceSequence(email);
-              if (result.ok) {
-                summary.flushedPendingFirstEmailsSent += 1;
-              } else {
-                summary.sendErrors += 1;
-              }
-            } catch (error) {
-              console.error(`Flushing pending first email ${email.id} failed`, error);
-              summary.sendErrors += 1;
-            }
-          })
-        );
-      }
-    }
+    const newSentToday = await getFirstEmailsSentTodayCount(settings.sendTimezone, "new");
+    await draftAndSendFirstTouches({
+      companyWhere: notReprospectCompanyWhere,
+      remainingSends: settings.dailyFirstEmailLimit - newSentToday,
+      withinWindow,
+      deadline,
+      summary,
+      counters: {
+        drafted: "draftedFirstEmails",
+        sent: "sentFromAutoApproval",
+        flushed: "flushedPendingFirstEmailsSent",
+      },
+    });
+  }
 
-    // 3b. Draft first emails for contacts that don't have one yet.
-    const needsDraft = deadline.expired()
-      ? []
-      : await prisma.contact.findMany({
-          where: { selected: true, emails: { none: { sequenceStep: 0 } } },
-          include: { company: true },
-        });
+  return summary;
+}
 
-    for (let i = 0; i < needsDraft.length; i += DRAFT_SEND_CONCURRENCY) {
-      if (deadline.expired()) {
-        summary.timeBudgetExhausted = true;
+type CounterKey = "draftedFirstEmails" | "sentFromAutoApproval" | "flushedPendingFirstEmailsSent" | "reprospectDrafted" | "reprospectSent";
+
+async function draftAndSendFirstTouches(opts: {
+  companyWhere: Prisma.CompanyWhereInput;
+  remainingSends: number;
+  withinWindow: boolean;
+  deadline: Deadline;
+  summary: AutoPipelineSummary;
+  counters: { drafted: CounterKey; sent: CounterKey; flushed: CounterKey };
+  orderByCreatedAt?: boolean;
+  draftOnlyWhatCanSend?: boolean;
+}) {
+  const { companyWhere, withinWindow, deadline, summary, counters } = opts;
+  let remainingSends = opts.remainingSends;
+
+  // a. Flush anything already drafted+approved from a PRIOR run that never
+  // actually sent (window was closed, budget was hit, etc.) — without this,
+  // an approved-but-unsent email is invisible to the "needsDraft" query
+  // below forever, since that query only looks for contacts with zero
+  // first-touch emails at all.
+  if (withinWindow && remainingSends > 0) {
+    const pendingApproved = await prisma.email.findMany({
+      where: { status: "approved", sequenceStep: 0, contact: { company: companyWhere } },
+      include: { contact: { include: { company: true } } },
+      orderBy: opts.orderByCreatedAt ? { createdAt: "asc" } : undefined,
+    });
+
+    for (let i = 0; i < pendingApproved.length; i += DRAFT_SEND_CONCURRENCY) {
+      if (deadline.expired() || remainingSends <= 0) {
+        if (deadline.expired()) summary.timeBudgetExhausted = true;
         break;
       }
-      const chunk = needsDraft.slice(i, i + DRAFT_SEND_CONCURRENCY);
+      const chunk = pendingApproved.slice(i, i + DRAFT_SEND_CONCURRENCY);
       await Promise.all(
-        chunk.map(async (contact) => {
+        chunk.map(async (email) => {
+          if (remainingSends <= 0) {
+            summary.sendSkippedLimitReached += 1;
+            return;
+          }
+          remainingSends -= 1;
           try {
-            const email = await draftFirstEmail(contact.id, undefined, true);
-            summary.draftedFirstEmails += 1;
-
-            if (email.status !== "approved") return;
-
-            if (!withinWindow) {
-              summary.sendSkippedOutsideWindow += 1;
-              return;
-            }
-            if (remainingSends <= 0) {
-              summary.sendSkippedLimitReached += 1;
-              return;
-            }
-            // Reserve budget synchronously (no await between check and
-            // decrement) so concurrent sends in this batch can't overshoot.
-            remainingSends -= 1;
-
-            const result = await sendEmailAndAdvanceSequence({ ...email, contact });
+            const result = await sendEmailAndAdvanceSequence(email);
             if (result.ok) {
-              summary.sentFromAutoApproval += 1;
+              summary[counters.flushed] += 1;
             } else {
               summary.sendErrors += 1;
             }
           } catch (error) {
-            console.error(`Automated drafting failed for contact ${contact.id}`, error);
-            summary.draftingErrors += 1;
+            console.error(`Flushing pending first email ${email.id} failed`, error);
+            summary.sendErrors += 1;
           }
         })
       );
     }
   }
 
-  return summary;
+  // b. Draft first emails for contacts that don't have one yet.
+  if (opts.draftOnlyWhatCanSend && (!withinWindow || remainingSends <= 0)) return;
+  const needsDraft = deadline.expired()
+    ? []
+    : await prisma.contact.findMany({
+        where: { selected: true, emails: { none: { sequenceStep: 0 } }, company: companyWhere },
+        include: { company: true },
+        orderBy: opts.orderByCreatedAt ? { createdAt: "asc" } : undefined,
+        take: opts.draftOnlyWhatCanSend ? remainingSends : undefined,
+      });
+
+  for (let i = 0; i < needsDraft.length; i += DRAFT_SEND_CONCURRENCY) {
+    if (deadline.expired()) {
+      summary.timeBudgetExhausted = true;
+      break;
+    }
+    const chunk = needsDraft.slice(i, i + DRAFT_SEND_CONCURRENCY);
+    await Promise.all(
+      chunk.map(async (contact) => {
+        try {
+          const email = await draftFirstEmail(contact.id, undefined, true);
+          summary[counters.drafted] += 1;
+
+          if (email.status !== "approved") return;
+
+          if (!withinWindow) {
+            summary.sendSkippedOutsideWindow += 1;
+            return;
+          }
+          if (remainingSends <= 0) {
+            summary.sendSkippedLimitReached += 1;
+            return;
+          }
+          // Reserve budget synchronously (no await between check and
+          // decrement) so concurrent sends in this batch can't overshoot.
+          remainingSends -= 1;
+
+          const result = await sendEmailAndAdvanceSequence({ ...email, contact });
+          if (result.ok) {
+            summary[counters.sent] += 1;
+          } else {
+            summary.sendErrors += 1;
+          }
+        } catch (error) {
+          console.error(`Automated drafting failed for contact ${contact.id}`, error);
+          summary.draftingErrors += 1;
+        }
+      })
+    );
+  }
 }

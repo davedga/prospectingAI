@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { reprospectCompanyWhere, notReprospectCompanyWhere } from "@/lib/reprospect";
 
 function getOffsetMinutes(timezone: string, date: Date): number {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -43,12 +44,17 @@ export async function getProspectedTodayCount(timezone: string): Promise<number>
   });
 }
 
-export async function getFirstEmailsSentTodayCount(timezone: string): Promise<number> {
+// Net-new and re-prospect first touches have separate daily budgets.
+export async function getFirstEmailsSentTodayCount(
+  timezone: string,
+  source: "new" | "reprospect" = "new"
+): Promise<number> {
   return prisma.email.count({
     where: {
       status: "sent",
       sequenceStep: 0,
       sentAt: { gte: startOfDayInTimezone(timezone) },
+      contact: { company: source === "reprospect" ? reprospectCompanyWhere : notReprospectCompanyWhere },
     },
   });
 }

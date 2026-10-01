@@ -3,7 +3,7 @@ import { searchOrganization, searchPeople, enrichPerson } from "@/lib/apollo";
 import { isRealDomain } from "@/lib/domain";
 import { findExcludedBrandMatch } from "@/lib/brand-match";
 
-function classifyDecisionRole(title: string): string {
+export function classifyDecisionRole(title: string): string {
   const t = title.toLowerCase();
   if (/\b(ceo|founder|president|owner)\b/.test(t)) return "Economic buyer";
   if (/\b(vp|head of|director|chief)\b/.test(t)) return "Functional owner";

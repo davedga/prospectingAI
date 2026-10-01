@@ -2,6 +2,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { anthropic, CLAUDE_MODEL } from "@/lib/anthropic";
 import { prisma } from "@/lib/prisma";
 import { getSettings } from "@/lib/settings";
+import { parseAngle, parseSignal, reprospectAngleInstruction } from "@/lib/reprospect";
 
 const DRAFT_EMAIL_TOOL = {
   name: "draft_email",
@@ -172,8 +173,10 @@ export async function draftFirstEmail(
 
   // Assigned once per contact and reused for the whole sequence, so
   // follow-ups stay consistent with whichever variant the first touch used.
-  let variant: string | null = null;
-  if (settings.abTestingEnabled) {
+  // Re-prospects carry their angle ("R-...") from import and skip A/B.
+  const angle = parseAngle(contact.variant);
+  let variant: string | null = angle ? contact.variant : null;
+  if (!angle && settings.abTestingEnabled) {
     variant = contact.variant;
     if (!variant) {
       variant = Math.random() < 0.5 ? "A" : "B";
@@ -228,6 +231,7 @@ ${
 
 ${feedbackNote ? `Quick note for this regeneration: ${feedbackNote}` : ""}
 ${variantHint ? `\nStanding personalization approach for this contact (variant ${variant}): ${variantHint}` : ""}
+${angle ? `\n${reprospectAngleInstruction(angle, parseSignal(contact.company.accountThesis))}` : ""}
 
 Draft the first outreach email (sequence step 0) to this contact. End with the closing "Best," — do not sign with a name or company, a signature block is appended automatically after your draft. Never sign off using the recipient's own name.`;
 
