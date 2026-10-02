@@ -12,16 +12,21 @@ import { createDeadline } from "@/lib/time-budget";
 export const maxDuration = 60;
 
 const CONCURRENCY = 5;
-const BUDGET_MS = 45_000;
+const BUDGET_MS = 30_000;
+// Hard cap per call so the response reliably returns under maxDuration even
+// when each generation is slow — the caller loops until remaining hits 0.
+const MAX_PER_CALL = 15;
 
 export async function POST() {
   const deadline = createDeadline(BUDGET_MS);
 
-  const pending = await prisma.email.findMany({
+  const allPending = await prisma.email.findMany({
     where: { status: "draft", sequenceStep: { gt: 0 }, subject: "" },
     select: { id: true },
     orderBy: { scheduledFor: "asc" },
   });
+  const totalPendingBefore = allPending.length;
+  const pending = allPending.slice(0, MAX_PER_CALL);
 
   let generated = 0;
   const errors: { id: string; error: string }[] = [];
@@ -45,10 +50,11 @@ export async function POST() {
   }
 
   return NextResponse.json({
-    totalPending: pending.length,
+    totalPendingBefore,
+    attempted: pending.length,
     generated,
-    remaining: Math.max(0, pending.length - generated - errors.length),
+    remaining: Math.max(0, totalPendingBefore - generated),
     errorCount: errors.length,
-    errors: errors.slice(0, 5),
+    errors: errors.slice(0, 3),
   });
 }
