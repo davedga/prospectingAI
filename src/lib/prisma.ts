@@ -10,7 +10,7 @@ const globalForPrisma = globalThis as unknown as {
 // dev Postgres (no TLS) still connects.
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === "production" ? true : undefined,
+  ssl: process.env.NODE_ENV === "production" ? (process.env.DATABASE_CA_CERT ? { ca: process.env.DATABASE_CA_CERT.replace(/\\n/g, "\n") } : true) : undefined,
 });
 
 export const prisma = globalForPrisma.prisma ?? new PrismaClient({ adapter });
