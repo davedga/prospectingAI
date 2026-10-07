@@ -14,7 +14,12 @@ const FOLLOWUP_CONCURRENCY = 8;
 // cron-job.org's free tier) time out client-side well before 60s. Staying
 // well under that so the response reliably comes back and the scheduler
 // records a real success/failure instead of a client-side timeout.
-const CYCLE_BUDGET_MS = 25_000;
+const CYCLE_BUDGET_MS = 48_000;
+// The first-touch pipeline runs before follow-ups and, when there's a big
+// queue of newly selected contacts to draft, would otherwise burn the whole
+// cycle budget on first emails and leave nothing for the follow-up backlog.
+// Cap it to a slice of the cycle so follow-ups always get the rest.
+const PIPELINE_BUDGET_MS = 16_000;
 // The pre-send Gmail reply-check scales with the size of the pending
 // follow-up backlog: with a few hundred pending, checking every one at
 // once eats the whole cycle budget, the shared deadline expires, and the
@@ -53,8 +58,11 @@ export async function runAutomationCycle(
   // can't consume the whole cycle and starve the send loop when the pending
   // follow-up backlog is large. Contacts it doesn't reach roll to next run.
   const replyCheckDeadline = createDeadline(REPLY_CHECK_BUDGET_MS);
+  // Capped sub-budget for the first-touch pipeline so it can't starve the
+  // follow-up phases below; whatever it doesn't finish rolls to the next run.
+  const pipelineDeadline = createDeadline(PIPELINE_BUDGET_MS);
 
-  const pipelineSummary = await runAutomatedPipeline(deadline).catch((error) => {
+  const pipelineSummary = await runAutomatedPipeline(pipelineDeadline).catch((error) => {
     console.error("Automated pipeline run failed", error);
     return null;
   });
