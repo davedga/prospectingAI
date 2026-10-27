@@ -9,6 +9,10 @@
     "lint": "eslint",
     "seed": "tsx prisma/seed.ts",
     "hash-password": "tsx scripts/hash-password.ts",
+    "import-cmo": "tsx scripts/import-cmo.ts",
+    "import-ig": "tsx scripts/import-ig.ts",
+    "snapshot-metrics": "tsx scripts/snapshot-metrics.ts",
+    "sync-lists": "tsx scripts/import-cmo.ts && tsx scripts/import-ig.ts && tsx scripts/snapshot-metrics.ts",
     "postinstall": "prisma generate"
   },
   "prisma": {
@@ -49,6 +53,7 @@
     "eslint-config-next": "16.3.0",
     "tailwindcss": "^4",
     "tsx": "^4.23.5",
-    "typescript": "^5"
+    "typescript": "^5",
+    "xlsx": "^0.18.5"
   }
 }

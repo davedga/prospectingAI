@@ -157,3 +157,96 @@ model Settings {
   abVariantBHint         String?  @db.Text
   updatedAt              DateTime @updatedAt
 }
+
+// ---------------------------------------------------------------------------
+// Reporting tracks. These three tracks are lead LISTS with status fields (not
+// send funnels — all email sending lives in the Email model above). They are
+// imported from the local master spreadsheets by scripts/import-cmo.ts and
+// scripts/import-ig.ts and surfaced read-only on the /reports page. Imports
+// upsert on a natural key so re-running the daily sync never duplicates.
+// ---------------------------------------------------------------------------
+
+// Fractional CMO prospects ("All Fractional CMOs" sheet).
+model CmoLead {
+  id               String   @id @default(cuid())
+  seq              Int? // "#" column from the sheet, for stable ordering
+  name             String
+  status           String? // e.g. "Vetted — list 2 (Sep 28)"
+  fit              Int? // "Fit (1-5)"
+  consumerSignals  String?  @db.Text
+  linkedin         String?
+  email            String?
+  emailStatus      String? // "Verified" | "Guessed" | ...
+  location         String?
+  apolloTitle      String?
+  headline         String?  @db.Text
+  firm             String?
+  firmIndustry     String?
+  currentRoles     String?  @db.Text
+  currentClients   String?  @db.Text
+  clientsContacted String?  @db.Text // "Clients DGA already contacted"
+  notes            String?  @db.Text
+  inBroadSearch    Boolean  @default(false) // "In 368-person search" == Yes
+  source           String   @default("cmo-master-import")
+  importedAt       DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Natural key for idempotent upsert: email when present, else linkedin.
+  dedupeKey String @unique
+}
+
+// Vetted client brands tied to the CMO track ("Client Brands (vetted)" sheet).
+model CmoClientBrand {
+  id               String   @id @default(cuid())
+  brand            String
+  website          String?
+  category         String?
+  relationship     String? // "Current" | "Past" | ...
+  ttsStatus        String? // TikTok Shop status
+  alreadyContacted String? // "Already contacted by DGA"
+  cmoName          String?
+  cmoFit           Int?
+  cmoLinkedin      String?
+  cmoEmail         String?
+  fromList         String?
+  source           String   @default("cmo-master-import")
+  importedAt       DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  dedupeKey String @unique // normalized brand name
+}
+
+// Instagram DM leads worked by Cam ("Master" sheet).
+model IgDmLead {
+  id                String   @id @default(cuid())
+  seq               Int? // "#" column
+  batchDate         String? // kept as the sheet's string, e.g. "2026-09-28"
+  brand             String
+  category          String?
+  website           String?
+  igHandle          String?
+  igUrl             String?
+  tiktokHandle      String?
+  ttsStatus         String? // "TikTok Shop Status"
+  ttsEvidence       String?  @db.Text
+  revenueBasis      String?  @db.Text // "7-Figure Basis (estimate)"
+  revenueConfidence String? // "High" | "Medium" | "Low"
+  usHq              String?
+  camDmStatus       String? // "Cam DM Status" — the IG outreach state
+  notes             String?  @db.Text
+  source            String   @default("ig-master-import")
+  importedAt        DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  dedupeKey String @unique // igUrl when present, else normalized brand
+}
+
+// One row per day of the headline reporting numbers, written by
+// scripts/snapshot-metrics.ts, so /reports can show day-over-day deltas
+// without recomputing history.
+model MetricSnapshot {
+  id        String   @id @default(cuid())
+  date      String   @unique // YYYY-MM-DD (America/New_York)
+  payload   Json
+  createdAt DateTime @default(now())
+}
