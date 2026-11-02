@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getReportData, isValidShareToken } from "@/lib/reports";
+import { getReportData, isValidShareToken, type DateRange } from "@/lib/reports";
 import { ReportView } from "@/components/reports/report-view";
 
 // Public, read-only management report. This route is OUTSIDE the (dashboard)
@@ -9,15 +9,30 @@ import { ReportView } from "@/components/reports/report-view";
 // same token so the CSV buttons work from the shared view too.
 export const dynamic = "force-dynamic";
 
+function parseDays(raw: string | undefined): number | null {
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+}
+
+function rangeFromDays(days: number | null): DateRange | undefined {
+  return days ? { from: new Date(Date.now() - days * 86_400_000) } : undefined;
+}
+
 export default async function SharedReportPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ token: string }>;
+  searchParams: Promise<{ days?: string }>;
 }) {
   const { token } = await params;
   if (!isValidShareToken(token)) notFound();
 
-  const full = await getReportData();
+  const { days } = await searchParams;
+  const activeRangeDays = parseDays(days);
+  const range = rangeFromDays(activeRangeDays);
+
+  const full = await getReportData(range);
   // Strip admin-only recipient emails before they reach the public share
   // payload — the share view never renders them, but they'd otherwise ship
   // in the serialized props. openCount stays (it's non-identifying).
@@ -35,6 +50,12 @@ export default async function SharedReportPage({
           readOnly
           exportHref={(d) =>
             `/api/reports/export/${d}?token=${encodeURIComponent(token)}`
+          }
+          activeRangeDays={activeRangeDays}
+          rangePresetHref={(dd) =>
+            dd
+              ? `/report/${encodeURIComponent(token)}?days=${dd}`
+              : `/report/${encodeURIComponent(token)}`
           }
         />
       </div>

@@ -39,22 +39,43 @@ export type FunnelCounts = {
   followUps: number;
 };
 
-const sentWhere = { sentAt: { not: null } } as const;
+// Optional reporting window. When set, email metrics filter on sentAt and
+// reply metrics on repliedAt; brand-DB counts/segments stay all-time.
+export type DateRange = { from?: Date; to?: Date };
+
+function sentAtFilter(range?: DateRange) {
+  const f: { not: null; gte?: Date; lte?: Date } = { not: null };
+  if (range?.from) f.gte = range.from;
+  if (range?.to) f.lte = range.to;
+  return f;
+}
+
+function repliedAtFilter(range?: DateRange) {
+  const f: { not: null; gte?: Date; lte?: Date } = { not: null };
+  if (range?.from) f.gte = range.from;
+  if (range?.to) f.lte = range.to;
+  return f;
+}
+
+function sentWhereFor(range?: DateRange) {
+  return { sentAt: sentAtFilter(range) };
+}
 
 // Replies are tracked on Contact.repliedAt (set when a Gmail reply is detected,
 // which stops further follow-ups) — NOT on Email.status. Bounces are not
 // status-tracked in this pipeline, so bounced stays 0 and delivered == sent.
 async function funnelForWhere(
   emailExtra: Record<string, unknown> = {},
-  contactWhere: Record<string, unknown> = {}
+  contactWhere: Record<string, unknown> = {},
+  range?: DateRange
 ): Promise<FunnelCounts> {
-  const base = { ...sentWhere, ...emailExtra };
+  const base = { ...sentWhereFor(range), ...emailExtra };
 
   const [sent, bounced, replied, firstTouches, followUps, openedRows] =
     await Promise.all([
       prisma.email.count({ where: base }),
       prisma.email.count({ where: { ...base, status: "bounced" } }),
-      prisma.contact.count({ where: { repliedAt: { not: null }, ...contactWhere } }),
+      prisma.contact.count({ where: { repliedAt: repliedAtFilter(range), ...contactWhere } }),
       prisma.email.count({ where: { ...base, sequenceStep: 0 } }),
       prisma.email.count({ where: { ...base, sequenceStep: { gt: 0 } } }),
       // Only opened emails (small set) are pulled in full, so we can apply
@@ -97,16 +118,16 @@ export type StepRow = {
 
 // Replies are per-contact (Contact.repliedAt), not per-step, so this table is
 // sent / opened per touch; reply counts live in the funnel + "who's replying".
-async function funnelByStep(): Promise<StepRow[]> {
+async function funnelByStep(range?: DateRange): Promise<StepRow[]> {
   const [sent, opened] = await Promise.all([
     prisma.email.groupBy({
       by: ["sequenceStep"],
-      where: sentWhere,
+      where: sentWhereFor(range),
       _count: { _all: true },
     }),
     prisma.email.groupBy({
       by: ["sequenceStep"],
-      where: { ...sentWhere, openedAt: { not: null } },
+      where: { ...sentWhereFor(range), openedAt: { not: null } },
       _count: { _all: true },
     }),
   ]);
@@ -133,9 +154,9 @@ export type PersonActivity = {
   openCount?: number;
 };
 
-async function recentOpeners(limit = 50): Promise<PersonActivity[]> {
+async function recentOpeners(limit = 50, range?: DateRange): Promise<PersonActivity[]> {
   const rows = await prisma.email.findMany({
-    where: { ...sentWhere, openedAt: { not: null } },
+    where: { ...sentWhereFor(range), openedAt: { not: null } },
     orderBy: { openedAt: "desc" },
     take: limit,
     select: {
@@ -163,9 +184,9 @@ async function recentOpeners(limit = 50): Promise<PersonActivity[]> {
   }));
 }
 
-async function recentRepliers(limit = 50): Promise<PersonActivity[]> {
+async function recentRepliers(limit = 50, range?: DateRange): Promise<PersonActivity[]> {
   const rows = await prisma.contact.findMany({
-    where: { repliedAt: { not: null } },
+    where: { repliedAt: repliedAtFilter(range) },
     orderBy: { repliedAt: "desc" },
     take: limit,
     select: {
@@ -245,6 +266,85 @@ async function groupCount(
     .sort((a: CountRow, b: CountRow) => b.count - a.count);
 }
 
+// One row per sent email, for the admin searchable engagement table + CSV.
+// Carries the full open timeline (every EmailOpenEvent) plus the fast
+// summary fields. Admin-only — includes recipient email.
+export type EngagementRow = {
+  emailId: string;
+  company: string;
+  person: string;
+  title: string;
+  email: string | null;
+  step: number;
+  status: string;
+  sentAt: Date | null;
+  firstOpenAt: Date | null;
+  lastOpenAt: Date | null;
+  openCount: number;
+  genuineOpen: boolean;
+  clicked: boolean;
+  clickedAt: Date | null;
+  repliedAt: Date | null;
+  openTimestamps: Date[];
+};
+
+export async function getEngagementRows(range?: DateRange): Promise<EngagementRow[]> {
+  const rows = await prisma.email.findMany({
+    where: sentWhereFor(range),
+    orderBy: { sentAt: "desc" },
+    select: {
+      id: true,
+      sequenceStep: true,
+      status: true,
+      sentAt: true,
+      openedAt: true,
+      openCount: true,
+      clickedAt: true,
+      clickCount: true,
+      contact: {
+        select: {
+          name: true,
+          title: true,
+          email: true,
+          repliedAt: true,
+          company: { select: { name: true } },
+        },
+      },
+      openEvents: { select: { openedAt: true }, orderBy: { openedAt: "asc" } },
+    },
+  });
+
+  return rows.map((r) => {
+    const eventTimes = r.openEvents.map((e) => e.openedAt);
+    // Fall back to the summary openedAt for emails sent before per-open
+    // logging existed (they have no events).
+    const firstOpenAt = eventTimes[0] ?? r.openedAt;
+    const lastOpenAt = eventTimes[eventTimes.length - 1] ?? r.openedAt;
+    const genuineOpen =
+      firstOpenAt != null &&
+      r.sentAt != null &&
+      firstOpenAt.getTime() - r.sentAt.getTime() >= GENUINE_OPEN_MIN_MS;
+    return {
+      emailId: r.id,
+      company: r.contact.company.name,
+      person: r.contact.name,
+      title: r.contact.title,
+      email: r.contact.email,
+      step: r.sequenceStep,
+      status: r.status,
+      sentAt: r.sentAt,
+      firstOpenAt,
+      lastOpenAt,
+      openCount: r.openCount,
+      genuineOpen,
+      clicked: r.clickCount > 0 || r.clickedAt != null,
+      clickedAt: r.clickedAt,
+      repliedAt: r.contact.repliedAt,
+      openTimestamps: eventTimes,
+    };
+  });
+}
+
 export type ReportData = {
   generatedAt: Date;
   overall: FunnelCounts;
@@ -271,9 +371,10 @@ export type ReportData = {
   igByTtsStatus: CountRow[];
   igByDmStatus: CountRow[];
   trend: { date: string; replyRate: number; openRate: number; sent: number }[];
+  range: { from: Date | null; to: Date | null };
 };
 
-export async function getReportData(): Promise<ReportData> {
+export async function getReportData(range?: DateRange): Promise<ReportData> {
   const [
     overall,
     streamNew,
@@ -299,14 +400,14 @@ export async function getReportData(): Promise<ReportData> {
     igByDmStatus,
     snapshots,
   ] = await Promise.all([
-    funnelForWhere(),
-    funnelForWhere(streamEmailWhere("new"), { company: companyStreamWhere("new") }),
+    funnelForWhere({}, {}, range),
+    funnelForWhere(streamEmailWhere("new"), { company: companyStreamWhere("new") }, range),
     funnelForWhere(streamEmailWhere("reprospect"), {
       company: companyStreamWhere("reprospect"),
-    }),
-    funnelByStep(),
-    recentOpeners(),
-    recentRepliers(),
+    }, range),
+    funnelByStep(range),
+    recentOpeners(50, range),
+    recentRepliers(50, range),
     companySegments("archetype"),
     companySegments("estRevenue"),
     prisma.company.count(),
@@ -384,6 +485,7 @@ export async function getReportData(): Promise<ReportData> {
     igByTtsStatus,
     igByDmStatus,
     trend,
+    range: { from: range?.from ?? null, to: range?.to ?? null },
   };
 }
 

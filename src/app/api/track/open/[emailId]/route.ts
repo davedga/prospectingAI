@@ -13,10 +13,16 @@ async function recordOpen(emailId: string) {
     where: { id: emailId, status: "sent", openedAt: null },
     data: { openedAt: new Date() },
   });
-  await prisma.email.updateMany({
+  const updated = await prisma.email.updateMany({
     where: { id: emailId, status: "sent" },
     data: { openCount: { increment: 1 } },
   });
+  // Log every hit with its own timestamp so the report can show the full
+  // open timeline, not just the first open. Only for a real sent email
+  // (updated.count > 0 means the id matched a sent row).
+  if (updated.count > 0) {
+    await prisma.emailOpenEvent.create({ data: { emailId } });
+  }
 }
 
 export async function GET(

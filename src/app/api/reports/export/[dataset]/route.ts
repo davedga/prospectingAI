@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { toCsv, isValidShareToken } from "@/lib/reports";
+import { toCsv, isValidShareToken, getEngagementRows } from "@/lib/reports";
 
 // One-click CSV export for the report datasets. This path is allow-listed in
 // src/proxy.ts (middleware doesn't gate it), so the handler does its own
@@ -125,6 +125,46 @@ async function buildCsv(dataset: string): Promise<{ csv: string; filename: strin
       const rows = await prisma.igDmLead.findMany({ orderBy: { seq: "asc" } });
       return { csv: toCsv(cols, rows as unknown as Record<string, unknown>[]), filename: "ig-dm-leads" };
     }
+    case "engagement": {
+      const cols: Column[] = [
+        { key: "company", header: "Brand" },
+        { key: "person", header: "Person" },
+        { key: "title", header: "Title" },
+        { key: "email", header: "Email" },
+        { key: "step", header: "Step" },
+        { key: "status", header: "Status" },
+        { key: "sentAt", header: "Sent at" },
+        { key: "openCount", header: "Opens" },
+        { key: "firstOpenAt", header: "First open" },
+        { key: "lastOpenAt", header: "Last open" },
+        { key: "genuineOpen", header: "Genuine open" },
+        { key: "clicked", header: "Clicked" },
+        { key: "repliedAt", header: "Replied at" },
+        { key: "gmail", header: "Gmail search" },
+        { key: "openTimestamps", header: "All open times" },
+      ];
+      const data = await getEngagementRows();
+      const rows = data.map((r) => ({
+        company: r.company,
+        person: r.person,
+        title: r.title,
+        email: r.email,
+        step: r.step === 0 ? "First" : `FU ${r.step}`,
+        status: r.status,
+        sentAt: r.sentAt,
+        openCount: r.openCount,
+        firstOpenAt: r.firstOpenAt,
+        lastOpenAt: r.lastOpenAt,
+        genuineOpen: r.genuineOpen ? "yes" : "",
+        clicked: r.clicked ? "yes" : "",
+        repliedAt: r.repliedAt,
+        gmail: r.email
+          ? `https://mail.google.com/mail/u/0/#search/${encodeURIComponent(`from:${r.email} OR to:${r.email}`)}`
+          : "",
+        openTimestamps: r.openTimestamps.map((d) => d.toISOString()).join(" | "),
+      }));
+      return { csv: toCsv(cols, rows as unknown as Record<string, unknown>[]), filename: "engagement" };
+    }
     default:
       return null;
   }
@@ -135,12 +175,18 @@ export async function GET(
   { params }: { params: Promise<{ dataset: string }> }
 ) {
   const token = new URL(request.url).searchParams.get("token");
-  const authorized = isValidShareToken(token) || !!(await auth());
+  const isAdmin = !!(await auth());
+  const authorized = isValidShareToken(token) || isAdmin;
   if (!authorized) {
     return new Response("Unauthorized", { status: 401 });
   }
 
   const { dataset } = await params;
+  // The engagement export includes recipient emails — admin session only,
+  // never the public share token.
+  if (dataset === "engagement" && !isAdmin) {
+    return new Response("Forbidden", { status: 403 });
+  }
   const result = await buildCsv(dataset);
   if (!result) {
     return new Response("Unknown dataset", { status: 404 });

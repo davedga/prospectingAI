@@ -126,6 +126,21 @@ model Email {
   clickCount      Int       @default(0)
   variant         String? // "A" | "B" — copied from Contact.variant at creation time
   createdAt       DateTime  @default(now())
+
+  openEvents      EmailOpenEvent[]
+}
+
+// One row per open-pixel hit, so the report can show EVERY open's timestamp
+// (not just the first). openedAt/openCount on Email stay as the fast summary;
+// this is the detailed timeline. Historical emails sent before this existed
+// simply have no events (the report falls back to Email.openedAt).
+model EmailOpenEvent {
+  id       String   @id @default(cuid())
+  emailId  String
+  email    Email    @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  openedAt DateTime @default(now())
+
+  @@index([emailId])
 }
 
 model Feedback {

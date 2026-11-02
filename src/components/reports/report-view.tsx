@@ -16,7 +16,10 @@ import {
   type CountRow,
   type SegmentRow,
   type PersonActivity,
+  type EngagementRow,
 } from "@/lib/reports";
+import { ReportTabs } from "@/components/reports/report-tabs";
+import { EngagementTable } from "@/components/reports/engagement-table";
 
 const DATASETS: { key: string; label: string }[] = [
   { key: "brands", label: "Brands" },
@@ -293,15 +296,110 @@ function Section({
   );
 }
 
+// Compact dual-line trend of open-rate and reply-rate over the snapshot
+// history. Pure inline SVG — no chart dependency, legible in both themes.
+function TrendChart({
+  trend,
+}: {
+  trend: ReportData["trend"];
+}) {
+  if (trend.length < 2) {
+    return (
+      <p className="text-sm text-neutral-500">
+        Not enough history yet — the trend needs at least two daily snapshots.
+      </p>
+    );
+  }
+  const W = 720;
+  const H = 180;
+  const padX = 8;
+  const padY = 14;
+  const maxRate = Math.max(5, ...trend.map((t) => Math.max(t.openRate, t.replyRate)));
+  const x = (i: number) => padX + (i * (W - 2 * padX)) / (trend.length - 1);
+  const y = (v: number) => padY + (H - 2 * padY) * (1 - v / maxRate);
+  const line = (key: "openRate" | "replyRate") =>
+    trend.map((t, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(t[key]).toFixed(1)}`).join(" ");
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-4 text-xs text-neutral-500">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="inline-block h-2 w-3 rounded-sm bg-blue-500" /> Open rate
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="inline-block h-2 w-3 rounded-sm bg-emerald-500" /> Reply rate
+        </span>
+        <span className="ml-auto">
+          {trend[0].date} → {trend[trend.length - 1].date}
+        </span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-44 w-full" preserveAspectRatio="none">
+        <line x1={padX} y1={y(0)} x2={W - padX} y2={y(0)} className="stroke-foreground/10" strokeWidth={1} />
+        <path d={line("openRate")} fill="none" className="stroke-blue-500" strokeWidth={2} />
+        <path d={line("replyRate")} fill="none" className="stroke-emerald-500" strokeWidth={2} />
+        {trend.map((t, i) => (
+          <g key={t.date}>
+            <circle cx={x(i)} cy={y(t.openRate)} r={2.5} className="fill-blue-500" />
+            <circle cx={x(i)} cy={y(t.replyRate)} r={2.5} className="fill-emerald-500" />
+          </g>
+        ))}
+      </svg>
+    </div>
+  );
+}
+
+const RANGE_PRESETS: { days: number | null; label: string }[] = [
+  { days: 7, label: "7d" },
+  { days: 30, label: "30d" },
+  { days: 90, label: "90d" },
+  { days: null, label: "All" },
+];
+
+function RangePresets({
+  activeRangeDays,
+  rangePresetHref,
+}: {
+  activeRangeDays: number | null | undefined;
+  rangePresetHref: (days: number | null) => string;
+}) {
+  return (
+    <div className="inline-flex overflow-hidden rounded-lg ring-1 ring-foreground/10">
+      {RANGE_PRESETS.map((p) => {
+        const active = (activeRangeDays ?? null) === p.days;
+        return (
+          <a
+            key={p.label}
+            href={rangePresetHref(p.days)}
+            className={cn(
+              "px-3 py-1.5 text-xs font-medium transition-colors",
+              active ? "bg-foreground text-background" : "bg-card hover:bg-foreground/5"
+            )}
+          >
+            {p.label}
+          </a>
+        );
+      })}
+    </div>
+  );
+}
+
 export function ReportView({
   data,
+  engagement,
   exportHref,
   readOnly = false,
+  rangePresetHref,
+  activeRangeDays,
 }: {
   data: ReportData;
+  /** All sent emails for the admin engagement tab. Omit for the public share view. */
+  engagement?: EngagementRow[];
   /** Builds the CSV download URL for a dataset (lets the share page append its token). */
   exportHref: (dataset: string) => string;
   readOnly?: boolean;
+  /** Builds the URL for a date-range preset; when provided, the range switcher renders. */
+  rangePresetHref?: (days: number | null) => string;
+  activeRangeDays?: number | null;
 }) {
   const { counts, overall } = data;
   const latest = data.trend[data.trend.length - 1];
@@ -310,68 +408,15 @@ export function ReportView({
     cur != null && old != null
       ? `${cur - old >= 0 ? "+" : ""}${Math.round((cur - old) * 10) / 10}`
       : undefined;
+  const rangeLabel =
+    activeRangeDays == null ? "all time" : `last ${activeRangeDays} days`;
 
-  return (
-    <div className="space-y-8">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">
-            Prospecting Report
-          </h1>
-          <p className="text-sm text-neutral-500">
-            All tracks — brand email outreach, fractional CMOs, and IG DM leads.
-            Generated {data.generatedAt.toLocaleString()}.
-            {readOnly ? " Read-only share view." : ""}
-          </p>
-        </div>
-        <Badge variant="secondary">
-          {latest ? `As of ${latest.date}` : "Live"}
-        </Badge>
-      </div>
+  const overview = (
+    <>
+      <Section title="Open & reply rate trend" description="Genuine open rate and reply rate across recent daily snapshots.">
+        <TrendChart trend={data.trend} />
+      </Section>
 
-      {/* One-click downloads */}
-      <div className="flex flex-wrap gap-2">
-        {DATASETS.map((d) => (
-          <a
-            key={d.key}
-            href={exportHref(d.key)}
-            className={cn(
-              "inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium",
-              "bg-card ring-1 ring-foreground/10 transition-colors hover:ring-foreground/30"
-            )}
-          >
-            ↓ {d.label} CSV
-          </a>
-        ))}
-      </div>
-
-      {/* Headline tiles */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <Tile label="Brands prospected" value={counts.brandsProspected} sub={`${counts.brands} total in DB`} />
-        <Tile label="Contacts (POCs)" value={counts.contacts} />
-        <Tile
-          label="Fractional CMOs"
-          value={counts.cmos}
-          sub={`${counts.cmosWithEmail} with email`}
-        />
-        <Tile
-          label="IG DM leads"
-          value={counts.igLeads}
-          sub={`${counts.igContacted} DM'd`}
-        />
-        <Tile
-          label="Open rate (genuine)"
-          value={`${pct(overall.genuineOpened, overall.sent)}%`}
-          sub={delta(latest?.openRate, prev?.openRate) ? `${delta(latest?.openRate, prev?.openRate)} vs prev` : undefined}
-        />
-        <Tile
-          label="Reply rate"
-          value={`${pct(overall.replied, overall.sent)}%`}
-          sub={delta(latest?.replyRate, prev?.replyRate) ? `${delta(latest?.replyRate, prev?.replyRate)} vs prev` : undefined}
-        />
-      </div>
-
-      {/* Email funnel */}
       <div className="grid gap-4 lg:grid-cols-3">
         <Section title="Email funnel — all">
           <FunnelTable counts={overall} />
@@ -384,7 +429,6 @@ export function ReportView({
         </Section>
       </div>
 
-      {/* Per-step */}
       <Section
         title="By sequence step"
         description="Sent / opened per touch (step 0 = first email, then follow-ups). Replies are per-contact — see the funnel and 'who's replying'."
@@ -423,23 +467,15 @@ export function ReportView({
         </Table>
       </Section>
 
-      {/* Targeting insights */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <Section
-          title="By segment / archetype"
-          description="What kind of brands are being targeted, and which convert."
-        >
+        <Section title="By segment / archetype" description="What kind of brands are being targeted, and which convert.">
           <SegmentTable rows={data.bySegment} head="Archetype" />
         </Section>
-        <Section
-          title="By scale (est. revenue)"
-          description="Revenue band of targeted brands, and which convert."
-        >
+        <Section title="By scale (est. revenue)" description="Revenue band of targeted brands, and which convert.">
           <SegmentTable rows={data.byScale} head="Est. revenue" />
         </Section>
       </div>
 
-      {/* Who's engaging */}
       <div className="grid gap-4 lg:grid-cols-2">
         <Section
           title="Who's replying"
@@ -462,8 +498,11 @@ export function ReportView({
           <PeopleTable people={data.openers} showOpens adminView={!readOnly} />
         </Section>
       </div>
+    </>
+  );
 
-      {/* CMO track */}
+  const tracks = (
+    <>
       <div className="grid gap-4 lg:grid-cols-3">
         <Section title="CMOs by status">
           <CountTable rows={data.cmoByStatus} head="Status" />
@@ -474,12 +513,11 @@ export function ReportView({
         <Section title="CMO client brands" description={`${counts.cmoBrands} vetted brands`}>
           <div className="p-2 text-sm text-neutral-500">
             {counts.cmoBrands} vetted client brands linked to CMOs. Download the
-            full list with the “CMO client brands CSV” button above.
+            full list with the “CMO client brands CSV” button in Downloads.
           </div>
         </Section>
       </div>
 
-      {/* IG track */}
       <div className="grid gap-4 lg:grid-cols-3">
         <Section title="IG leads by category">
           <CountTable rows={data.igByCategory} head="Category" />
@@ -491,6 +529,85 @@ export function ReportView({
           <CountTable rows={data.igByDmStatus} head="DM status" />
         </Section>
       </div>
+
+      <Section title="Downloads" description="One-click CSV exports.">
+        <div className="flex flex-wrap gap-2">
+          {DATASETS.map((d) => (
+            <a
+              key={d.key}
+              href={exportHref(d.key)}
+              className={cn(
+                "inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium",
+                "bg-card ring-1 ring-foreground/10 transition-colors hover:ring-foreground/30"
+              )}
+            >
+              ↓ {d.label} CSV
+            </a>
+          ))}
+        </div>
+      </Section>
+    </>
+  );
+
+  const tabs = [
+    { key: "overview", label: "Overview", content: overview },
+    ...(engagement
+      ? [
+          {
+            key: "engagement",
+            label: "Engagement",
+            content: (
+              <Section
+                title="Per-recipient engagement"
+                description="Every sent email — opens (with full timeline on hover), clicks, replies. Search a brand or person, or jump straight to Gmail."
+              >
+                <EngagementTable rows={engagement} exportHref={exportHref("engagement")} />
+              </Section>
+            ),
+          },
+        ]
+      : []),
+    { key: "tracks", label: "CMO & IG tracks", content: tracks },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">Prospecting Report</h1>
+          <p className="text-sm text-neutral-500">
+            Brand email outreach, fractional CMOs, and IG DM leads · {rangeLabel}.
+            Generated {data.generatedAt.toLocaleString()}.
+            {readOnly ? " Read-only share view." : ""}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {rangePresetHref ? (
+            <RangePresets activeRangeDays={activeRangeDays} rangePresetHref={rangePresetHref} />
+          ) : null}
+          <Badge variant="secondary">{latest ? `As of ${latest.date}` : "Live"}</Badge>
+        </div>
+      </div>
+
+      {/* Headline tiles */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <Tile label="Brands prospected" value={counts.brandsProspected} sub={`${counts.brands} total in DB`} />
+        <Tile label="Contacts (POCs)" value={counts.contacts} />
+        <Tile label="Fractional CMOs" value={counts.cmos} sub={`${counts.cmosWithEmail} with email`} />
+        <Tile label="IG DM leads" value={counts.igLeads} sub={`${counts.igContacted} DM'd`} />
+        <Tile
+          label="Open rate (genuine)"
+          value={`${pct(overall.genuineOpened, overall.sent)}%`}
+          sub={delta(latest?.openRate, prev?.openRate) ? `${delta(latest?.openRate, prev?.openRate)} vs prev` : undefined}
+        />
+        <Tile
+          label="Reply rate"
+          value={`${pct(overall.replied, overall.sent)}%`}
+          sub={delta(latest?.replyRate, prev?.replyRate) ? `${delta(latest?.replyRate, prev?.replyRate)} vs prev` : undefined}
+        />
+      </div>
+
+      <ReportTabs tabs={tabs} />
     </div>
   );
 }
