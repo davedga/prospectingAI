@@ -31,8 +31,16 @@ type CompanyRow = {
   accountThesis: string | null;
   parentCompany: string | null;
   status: string;
+  instagramUrl: string | null;
+  instagramVerified: boolean | null;
+  instagramCheckNote: string | null;
   exclusionCheck: { isExcluded: boolean; matchedName: string | null } | null;
 };
+
+function instagramHandle(url: string) {
+  const m = url.match(/instagram\.com\/([^/?#]+)/i);
+  return m ? `@${m[1]}` : url;
+}
 
 const PRIORITY_VARIANT: Record<string, "default" | "secondary" | "outline"> = {
   High: "default",
@@ -55,7 +63,43 @@ export function ResultsTable({
   const [feedback, setFeedback] = useState("");
   const [isPending, startTransition] = useTransition();
   const [finalized, setFinalized] = useState(companies[0]?.status !== "proposed");
+  const [verifyingIg, setVerifyingIg] = useState(false);
   const router = useRouter();
+
+  const uncheckedIg = companies.filter(
+    (c) => c.instagramUrl && c.instagramVerified == null
+  ).length;
+
+  const handleVerifyIg = async () => {
+    setVerifyingIg(true);
+    let done = 0;
+    try {
+      // Each call verifies the next batch of still-unchecked IG links; loop
+      // until the run has none left (or a batch comes back empty).
+      for (;;) {
+        const res = await fetch("/api/companies/verify-instagram", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ runId }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          toast.error(data?.error ?? "Instagram verification failed.");
+          break;
+        }
+        const data = await res.json();
+        done += data.processed ?? 0;
+        if (!data.processed || data.remaining === 0) {
+          toast.success(`Verified ${done} Instagram link(s).`);
+          break;
+        }
+        toast.message(`Verified ${done}… ${data.remaining} to go`);
+      }
+      router.refresh();
+    } finally {
+      setVerifyingIg(false);
+    }
+  };
 
   const toggle = (id: string) => {
     setSelected((prev) => {
@@ -79,12 +123,28 @@ export function ResultsTable({
 
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-neutral-500">
+          {uncheckedIg > 0
+            ? `${uncheckedIg} Instagram link(s) not yet verified.`
+            : "All Instagram links checked."}
+        </p>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleVerifyIg}
+          disabled={verifyingIg || uncheckedIg === 0}
+        >
+          {verifyingIg ? "Verifying Instagram…" : "Verify Instagram links"}
+        </Button>
+      </div>
       <div className="overflow-x-auto rounded-md border border-neutral-200">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead className="w-8" />
               <TableHead>Company</TableHead>
+              <TableHead>Instagram</TableHead>
               <TableHead>Hero SKU</TableHead>
               <TableHead>Price</TableHead>
               <TableHead>Archetype</TableHead>
@@ -118,6 +178,41 @@ export function ResultsTable({
                       Possible match: {company.exclusionCheck.matchedName}
                     </Badge>
                   )}
+                </TableCell>
+                <TableCell className="max-w-[12rem]">
+                  {company.instagramUrl ? (
+                    <a
+                      href={company.instagramUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block truncate text-xs text-blue-600 hover:underline"
+                    >
+                      {instagramHandle(company.instagramUrl)}
+                    </a>
+                  ) : (
+                    <span className="text-xs text-neutral-400">—</span>
+                  )}
+                  {company.instagramVerified === true ? (
+                    <Badge
+                      variant="secondary"
+                      className="mt-1 text-[10px]"
+                      title={company.instagramCheckNote ?? undefined}
+                    >
+                      ✓ Verified
+                    </Badge>
+                  ) : company.instagramVerified === false ? (
+                    <Badge
+                      variant="destructive"
+                      className="mt-1 text-[10px]"
+                      title={company.instagramCheckNote ?? undefined}
+                    >
+                      Unconfirmed
+                    </Badge>
+                  ) : company.instagramUrl ? (
+                    <Badge variant="outline" className="mt-1 text-[10px]">
+                      Unchecked
+                    </Badge>
+                  ) : null}
                 </TableCell>
                 <TableCell>{company.heroSku}</TableCell>
                 <TableCell>{company.skuPrice}</TableCell>

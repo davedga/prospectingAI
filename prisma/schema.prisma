@@ -22,6 +22,12 @@ model Company {
   name           String
   domain         String
   instagramUrl   String?
+  // IG link verification (see src/lib/verify-instagram.ts). null = never
+  // checked; true = handle confirmed via web search; false = could not
+  // confirm (instagramUrl may have been corrected or cleared).
+  instagramVerified  Boolean?
+  instagramCheckedAt DateTime?
+  instagramCheckNote String?
   tiktokUrl      String?
   amazonUrl      String?
   facebookUrl    String?

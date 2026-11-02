@@ -17,7 +17,16 @@ export default async function SharedReportPage({
   const { token } = await params;
   if (!isValidShareToken(token)) notFound();
 
-  const data = await getReportData();
+  const full = await getReportData();
+  // Strip admin-only recipient emails before they reach the public share
+  // payload — the share view never renders them, but they'd otherwise ship
+  // in the serialized props. openCount stays (it's non-identifying).
+  const stripEmail = (p: (typeof full.openers)[number]) => ({ ...p, email: null });
+  const data = {
+    ...full,
+    openers: full.openers.map(stripEmail),
+    repliers: full.repliers.map(stripEmail),
+  };
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-8">

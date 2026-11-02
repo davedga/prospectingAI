@@ -48,3 +48,6 @@ next-env.d.ts
 /.claude
 /.windsurf
 skills-lock.json
+
+# local scratch (certs, logs, one-off scripts) — never commit
+scratchpad/

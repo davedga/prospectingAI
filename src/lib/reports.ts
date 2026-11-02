@@ -127,6 +127,10 @@ export type PersonActivity = {
   title: string;
   step: number;
   at: Date | null;
+  // Admin-only fields — populated for the dashboard, omitted from the
+  // tokenized public share view so prospect emails never leak via a share link.
+  email?: string | null;
+  openCount?: number;
 };
 
 async function recentOpeners(limit = 50): Promise<PersonActivity[]> {
@@ -137,8 +141,14 @@ async function recentOpeners(limit = 50): Promise<PersonActivity[]> {
     select: {
       sequenceStep: true,
       openedAt: true,
+      openCount: true,
       contact: {
-        select: { name: true, title: true, company: { select: { name: true } } },
+        select: {
+          name: true,
+          title: true,
+          email: true,
+          company: { select: { name: true } },
+        },
       },
     },
   });
@@ -148,6 +158,8 @@ async function recentOpeners(limit = 50): Promise<PersonActivity[]> {
     title: r.contact.title,
     step: r.sequenceStep,
     at: r.openedAt,
+    email: r.contact.email,
+    openCount: r.openCount,
   }));
 }
 
@@ -159,6 +171,7 @@ async function recentRepliers(limit = 50): Promise<PersonActivity[]> {
     select: {
       name: true,
       title: true,
+      email: true,
       repliedAt: true,
       company: { select: { name: true } },
       emails: { where: { sentAt: { not: null } }, select: { sequenceStep: true } },
@@ -171,6 +184,7 @@ async function recentRepliers(limit = 50): Promise<PersonActivity[]> {
     // Which touch they last received before replying.
     step: r.emails.reduce((max, e) => Math.max(max, e.sequenceStep), 0),
     at: r.repliedAt,
+    email: r.email,
   }));
 }
 

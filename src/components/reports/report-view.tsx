@@ -180,7 +180,25 @@ function SegmentTable({ rows, head }: { rows: SegmentRow[]; head: string }) {
   );
 }
 
-function PeopleTable({ people }: { people: PersonActivity[] }) {
+/** Gmail search deep-link for a recipient — opens Gmail filtered to the
+ *  thread(s) with that person, so the team can jump straight to it. */
+function gmailSearchHref(email: string) {
+  const query = `from:${email} OR to:${email}`;
+  return `https://mail.google.com/mail/u/0/#search/${encodeURIComponent(query)}`;
+}
+
+function PeopleTable({
+  people,
+  showOpens = false,
+  adminView = false,
+}: {
+  people: PersonActivity[];
+  /** Show the per-recipient open count column (openers table only). */
+  showOpens?: boolean;
+  /** Admin dashboard: reveal recipient email + a "find in Gmail" link. Off for the public share view. */
+  adminView?: boolean;
+}) {
+  const colCount = 4 + (showOpens ? 1 : 0) + (adminView ? 1 : 0);
   return (
     <Table>
       <TableHeader>
@@ -188,13 +206,15 @@ function PeopleTable({ people }: { people: PersonActivity[] }) {
           <TableHead>Person</TableHead>
           <TableHead>Company</TableHead>
           <TableHead className="text-right">Step</TableHead>
+          {showOpens ? <TableHead className="text-right">Opens</TableHead> : null}
           <TableHead className="text-right">When</TableHead>
+          {adminView ? <TableHead className="text-right">Gmail</TableHead> : null}
         </TableRow>
       </TableHeader>
       <TableBody>
         {people.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={4} className="text-neutral-400">
+            <TableCell colSpan={colCount} className="text-neutral-400">
               No activity yet.
             </TableCell>
           </TableRow>
@@ -204,14 +224,45 @@ function PeopleTable({ people }: { people: PersonActivity[] }) {
               <TableCell>
                 <span className="font-medium">{p.name}</span>
                 <span className="block text-xs text-neutral-500">{p.title}</span>
+                {adminView && p.email ? (
+                  <span className="block text-xs text-neutral-400">{p.email}</span>
+                ) : null}
               </TableCell>
               <TableCell>{p.company}</TableCell>
               <TableCell className="text-right tabular-nums">
                 {p.step === 0 ? "First" : `FU ${p.step}`}
               </TableCell>
-              <TableCell className="text-right text-xs text-neutral-500">
-                {p.at ? p.at.toLocaleDateString() : "—"}
+              {showOpens ? (
+                <TableCell className="text-right tabular-nums">
+                  {p.openCount ?? "—"}
+                </TableCell>
+              ) : null}
+              <TableCell className="text-right text-xs text-neutral-500 whitespace-nowrap">
+                {p.at
+                  ? p.at.toLocaleString([], {
+                      month: "short",
+                      day: "numeric",
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })
+                  : "—"}
               </TableCell>
+              {adminView ? (
+                <TableCell className="text-right">
+                  {p.email ? (
+                    <a
+                      href={gmailSearchHref(p.email)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-medium text-blue-600 hover:underline"
+                    >
+                      Open ↗
+                    </a>
+                  ) : (
+                    <span className="text-xs text-neutral-400">—</span>
+                  )}
+                </TableCell>
+              ) : null}
             </TableRow>
           ))
         )}
@@ -390,11 +441,25 @@ export function ReportView({
 
       {/* Who's engaging */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <Section title="Who's replying" description="Most recent replies (follow-ups stop on reply).">
-          <PeopleTable people={data.repliers} />
+        <Section
+          title="Who's replying"
+          description={
+            readOnly
+              ? "Most recent replies (follow-ups stop on reply)."
+              : "Most recent replies (follow-ups stop on reply). Click Gmail to open the thread."
+          }
+        >
+          <PeopleTable people={data.repliers} adminView={!readOnly} />
         </Section>
-        <Section title="Who's opening" description="Most recent opens.">
-          <PeopleTable people={data.openers} />
+        <Section
+          title="Who's opening"
+          description={
+            readOnly
+              ? "Most recent opens, with how many times each recipient opened."
+              : "Most recent opens, with open count and first-open time. Click Gmail to find the recipient."
+          }
+        >
+          <PeopleTable people={data.openers} showOpens adminView={!readOnly} />
         </Section>
       </div>
 
