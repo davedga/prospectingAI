@@ -10,6 +10,7 @@ const links = [
   { href: "/prospecting", label: "Prospecting" },
   { href: "/brands", label: "Brands" },
   { href: "/reprospect", label: "Re-prospecting" },
+  { href: "/ig-leads", label: "IG Leads" },
   { href: "/reports", label: "Reports" },
   { href: "/drafting", label: "Drafting" },
   { href: "/review", label: "Review Queue" },

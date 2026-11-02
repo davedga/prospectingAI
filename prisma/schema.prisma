@@ -260,6 +260,11 @@ model IgDmLead {
   usHq              String?
   camDmStatus       String? // "Cam DM Status" — the IG outreach state
   notes             String?  @db.Text
+  // Set by the in-app generator (source="in-app-gen"): the IG handle was
+  // confirmed/corrected via live web search, not guessed. Spreadsheet imports
+  // leave these null.
+  igVerified        Boolean? @default(false)
+  igVerifyNote      String?  @db.Text
   source            String   @default("ig-master-import")
   importedAt        DateTime @default(now())
   updatedAt         DateTime @updatedAt
