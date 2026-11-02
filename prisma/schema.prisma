@@ -67,7 +67,12 @@ model ExclusionCheck {
 model ExcludedBrand {
   id      String   @id @default(cuid())
   name    String   @unique
-  source  String   @default("prior-prospects-import")
+  source  String   @default("prior-prospects-import") // provenance: which import/tab this row came from
+  // Whether this brand is a prior prospect that MAY be re-contacted, versus a
+  // hard do-not-contact. Both are kept out of NEW discovery; only
+  // "prior-prospect" rows are eligible for targeted re-prospecting.
+  category     String  @default("do-not-contact") // "prior-prospect" | "do-not-contact"
+  instagramUrl String? // kept for prior-prospect / IG-DM re-use when the source list has it
   addedAt DateTime @default(now())
 }
 

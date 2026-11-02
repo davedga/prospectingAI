@@ -11,6 +11,7 @@
     "hash-password": "tsx scripts/hash-password.ts",
     "import-cmo": "tsx scripts/import-cmo.ts",
     "import-ig": "tsx scripts/import-ig.ts",
+    "import-prospects": "tsx scripts/import-prospects.ts",
     "snapshot-metrics": "tsx scripts/snapshot-metrics.ts",
     "sync-lists": "tsx scripts/import-cmo.ts && tsx scripts/import-ig.ts && tsx scripts/snapshot-metrics.ts",
     "postinstall": "prisma generate"
