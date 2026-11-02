@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { searchOrganization, searchPeople, enrichPerson } from "@/lib/apollo";
 import { isRealDomain } from "@/lib/domain";
 import { findExcludedBrandMatch } from "@/lib/brand-match";
+import { isReprospectCompany } from "@/lib/reprospect";
 
 export function classifyDecisionRole(title: string): string {
   const t = title.toLowerCase();
@@ -61,29 +62,36 @@ export async function prospectCompany(companyId: string) {
     };
   }
 
-  const excludedBrands = await prisma.excludedBrand.findMany({ select: { name: true } });
-  const brandMatch = findExcludedBrandMatch(
-    company.name,
-    company.domain,
-    excludedBrands.map((b) => b.name)
-  );
-  if (brandMatch.matched) {
-    await prisma.company.update({
-      where: { id: companyId },
-      data: { status: "rejected" },
-    });
-    await prisma.feedback.create({
-      data: {
-        scope: "prospecting",
+  // Re-prospects are DELIBERATELY drawn from the prior-prospect/excluded list,
+  // so skip the excluded-brand rejection for companies in the re-prospect
+  // stream — otherwise they'd always self-reject (their own name is on the
+  // list). The duplicate-domain-already-contacted guard below still applies.
+  const reprospect = await isReprospectCompany(company);
+  if (!reprospect) {
+    const excludedBrands = await prisma.excludedBrand.findMany({ select: { name: true } });
+    const brandMatch = findExcludedBrandMatch(
+      company.name,
+      company.domain,
+      excludedBrands.map((b) => b.name)
+    );
+    if (brandMatch.matched) {
+      await prisma.company.update({
+        where: { id: companyId },
+        data: { status: "rejected" },
+      });
+      await prisma.feedback.create({
+        data: {
+          scope: "prospecting",
+          companyId,
+          note: `Skipped — "${company.name}" matches excluded brand "${brandMatch.matchedName}" (similarity ${brandMatch.score}). Never contact this brand.`,
+        },
+      });
+      return {
         companyId,
-        note: `Skipped — "${company.name}" matches excluded brand "${brandMatch.matchedName}" (similarity ${brandMatch.score}). Never contact this brand.`,
-      },
-    });
-    return {
-      companyId,
-      contactsCreated: 0,
-      error: `Skipped — matches excluded brand "${brandMatch.matchedName}". Marked rejected.`,
-    };
+        contactsCreated: 0,
+        error: `Skipped — matches excluded brand "${brandMatch.matchedName}". Marked rejected.`,
+      };
+    }
   }
 
   const duplicate = await findContactedDuplicate(company.domain, companyId);
