@@ -30,6 +30,11 @@ const PROPOSE_TOOL = {
             brand: { type: "string" },
             category: { type: "string", description: "e.g. Swimwear, Beauty, Pet, Snacks" },
             website: { type: "string", description: "Official site URL if known, else empty." },
+            instagramUrl: {
+              type: "string",
+              description:
+                "Your best guess at the brand's official Instagram URL (https://www.instagram.com/<handle>/) if you know it — it will be confirmed by web search, so a good guess speeds this up. Empty if unsure.",
+            },
             revenueBasis: {
               type: "string",
               description:
@@ -50,6 +55,7 @@ type Candidate = {
   brand: string;
   category?: string;
   website?: string;
+  instagramUrl?: string;
   revenueBasis?: string;
   revenueConfidence?: string;
   usHq?: string;
@@ -71,7 +77,7 @@ async function brainstorm(opts: {
   seedBrands?: string[];
   excludedSample: string[];
 }): Promise<Candidate[]> {
-  const want = Math.min(opts.count * 3 + 4, 40);
+  const want = Math.min(opts.count * 4 + 8, 48);
   const system = `You source TikTok-Shop IG-DM leads for Dallas Global Agency. DGA runs TikTok Shop for brands, so targets are brands that would BENEFIT from a TikTok Shop and don't run one at scale yet.
 
 Criteria (loose — these are DM leads, not the strict email ICP):
@@ -148,7 +154,9 @@ export async function generateIgLeadBatch(opts: {
     const ig = await runInstagramVerification({
       name: c.brand,
       websiteUrl: website,
-      proposedInstagramUrl: null,
+      // A proposed handle turns the verification into a fast confirm (instead
+      // of discovering from scratch), raising throughput and the hit rate.
+      proposedInstagramUrl: c.instagramUrl?.trim() || null,
     }).catch(() => null);
 
     if (!ig || ig.status === "not_found" || !ig.instagramUrl) {
@@ -201,8 +209,10 @@ export async function generateIgLeadBatch(opts: {
     });
   }
 
-  // Concurrency-capped worker loop.
-  const CONCURRENCY = 4;
+  // Concurrency-capped worker loop. Each candidate is a few web searches, so
+  // the limit is wall-clock, not CPU — run a wide pool to fit more in the
+  // ~55s budget.
+  const CONCURRENCY = 8;
   let idx = 0;
   async function worker() {
     while (idx < candidates.length && generated.length < count && !deadline.expired()) {
