@@ -26,6 +26,7 @@ export function DraftingBoard({
   const [generating, setGenerating] = useState<Set<string>>(new Set());
   const [isBulkApproving, startBulkApprove] = useTransition();
   const [isGeneratingAll, startGenerateAll] = useTransition();
+  const [isRegenerating, startRegenerate] = useTransition();
   const hasAutoStarted = useRef(false);
 
   const generateMissing = (isAuto: boolean) => {
@@ -107,6 +108,46 @@ export function DraftingBoard({
     startGenerateAll(() => generateMissing(false));
   };
 
+  // Re-draft the currently DRAFT-status first emails with the current copy
+  // templates, so stale drafts (generated under older copy) match what the
+  // backend sends now. Only touches status==="draft" — never approved/sent.
+  const handleRegenerateDrafts = () => {
+    const stale = draftEmails;
+    if (stale.length === 0) return;
+    if (
+      !window.confirm(
+        `Regenerate ${stale.length} draft(s) with the current email copy? This overwrites the current draft text (approved/sent emails are left alone).`
+      )
+    )
+      return;
+    startRegenerate(async () => {
+      for (const email of stale) {
+        setGenerating((s) => new Set(s).add(email.contactId));
+        try {
+          const res = await fetch(`/api/contacts/${email.contactId}/draft-email`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ auto: false }),
+          });
+          if (res.ok) {
+            const updated = await res.json();
+            setEmails((prev) => ({ ...prev, [updated.contactId]: updated }));
+          } else {
+            const data = await res.json().catch(() => null);
+            toast.error(data?.error ?? `Regenerate failed for ${email.contactName}.`);
+          }
+        } finally {
+          setGenerating((s) => {
+            const next = new Set(s);
+            next.delete(email.contactId);
+            return next;
+          });
+        }
+      }
+      toast.success("Drafts regenerated with current copy.");
+    });
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex justify-end gap-2">
@@ -117,6 +158,17 @@ export function DraftingBoard({
             disabled={isGeneratingAll}
           >
             {isGeneratingAll ? "Drafting..." : `Draft All (${missingCount})`}
+          </Button>
+        )}
+        {draftEmails.length > 0 && (
+          <Button
+            variant="outline"
+            onClick={handleRegenerateDrafts}
+            disabled={isRegenerating}
+          >
+            {isRegenerating
+              ? "Regenerating..."
+              : `Regenerate drafts to current copy (${draftEmails.length})`}
           </Button>
         )}
         {draftEmails.length > 0 && (

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { callDraftTool, CLAIMS_DISCIPLINE } from "@/lib/drafting";
+import { callDraftTool, CLAIMS_DISCIPLINE, currentTimeframe } from "@/lib/drafting";
 import { getSettings } from "@/lib/settings";
 
 export async function generateFollowUpContent(emailId: string, feedbackNote?: string) {
@@ -39,30 +39,33 @@ export async function generateFollowUpContent(emailId: string, feedbackNote?: st
 
   const isFinalTouch = email.sequenceStep >= settings.sequenceLength - 1;
   const isSenior = email.contact.decisionRole === "Economic buyer";
+  const tf = currentTimeframe();
 
-  // Each touch has a distinct, mostly-fixed shape rather than one generic
-  // "escalate a bit more" instruction — locked in from line-by-line review.
+  // Follow-ups are kept deliberately simple and human — short nudges, not
+  // research-heavy personalized pitches. The only numbers allowed are DGA's
+  // own general track-record range; no prospect-specific stat-digging, no
+  // hero-SKU name-drops. Timing words come from currentTimeframe() so "Q4"
+  // never goes stale.
   const stepStructure =
     email.sequenceStep === 1
-      ? `This is follow-up 1, the longest touch in the sequence (roughly 100-130 words). Shape, in this order:
+      ? `This is follow-up 1 (keep it short and human — roughly 70-90 words, NOT a mini-pitch). Shape, in this order:
 1. Transition line: "A little more context on why I reached out:"
-2. ONE short sentence with a real, sourced stat or insight about the category or a comparable brand's TikTok Shop performance — whatever's genuinely researched for this company, but only one sentence, one data point, don't stack multiple facts or name multiple brands, no extra caveat clauses tacked onto it. Write it in active voice. Reference the current period as "this year," not "heading into [year]" if that year is already substantially underway — check the actual current date rather than assuming.
-3. The GMV/track-record line: "for the right brands, we've seen TikTok Shop become a meaningful six and seven-figure monthly revenue channel within a matter of months" (paraphrase naturally, no hyphen after "six"). Skip this line entirely if step 2 already cited a real GMV figure for this specific prospect — don't follow a real number with an unrelated general one.
-4. The thesis and the walk-through offer, combined into ONE sentence, not two — e.g. "Going into Q4, I think [Company] has a real opportunity to [establish itself in this category / scale its existing TikTok Shop presence, whichever matches their real status], and I'd love the opportunity to walk you through how we envision doing that." Never "scale further" or "presence further" — "further" is banned, see the rules above. When referring back to a category already named in step 2, say "this category," not "a category." Never invent the thesis if their status doesn't clearly support one.
-5. A concrete meeting ask naming two specific upcoming weekdays (based on the actual current date, not fixed placeholder days) and roughly 15 minutes.`
+2. ONE plain credibility sentence using DGA's general track record only — e.g. "for the right brands, we've seen TikTok Shop become a meaningful six and seven-figure monthly revenue channel in a matter of months" (paraphrase naturally, no hyphen after "six"). Do NOT go hunting for a company-specific or competitor stat, and do NOT name other brands — this is a simple nudge, not a researched brief.
+3. The thesis + walk-through offer in ONE sentence — e.g. "${tf.opener}, I think [Company] has a real opportunity to [establish itself in this category / scale on TikTok Shop, whichever matches their real status], and I'd love to walk you through how we'd approach it." Never "scale further"/"presence further" ("further" is banned). Never invent a thesis their status doesn't support.
+4. A light meeting ask naming two specific upcoming weekdays (based on the actual current date) and roughly 15 minutes.`
       : isFinalTouch
-        ? `This is the LAST touch in the sequence, the shortest (roughly 55-70 words). Shape: "Last note from me on this." Then restate the thesis briefly and the offer to connect: "I think [Company] has a meaningful opportunity to scale on TikTok Shop going into the holiday season, and I'd love to connect with the team to discuss how we'd approach it." (say "going into the holiday season," not "ahead of Q4" here — the actual buildout may not literally finish before Q4, the real urgency is getting them signed soon). Then the redirect line, which branches by seniority:
+        ? `This is the LAST touch in the sequence, the shortest (roughly 45-65 words). Shape: "Last note from me on this." Then restate the thesis briefly and the offer to connect: "I think [Company] has a meaningful opportunity to scale on TikTok Shop ${tf.timing}, and I'd love to connect with the team to discuss how we'd approach it." Then the redirect line, which branches by seniority:
    - Junior/operational contact: a question, this exact phrasing — "If this falls outside your scope, is there someone else on the team who would be better to speak with about this opportunity?"
    - Senior/economic buyer: a statement, not a question — "If this sits with someone else on your team, I'd love the opportunity to discuss this with them." (this means a senior contact's final touch may end with zero question marks total, which is fine.)
    This contact is ${isSenior ? "senior — use the statement form" : "junior/operational — use the question form"}. No apology, no escape-hatch phrase either way.`
-        : `This is follow-up 2 (roughly 40-55 words, not the last touch, and follow-up 1 already covered the context/stat/strategy-share/meeting-ask — do NOT repeat that ground). Shape:
-1. A scarcity beat with a concrete timeframe about the agency onboarding its last few clients going into Q4 (paraphrase naturally, don't copy verbatim, e.g. "we're hunkering down over the next six weeks to onboard our last few clients going into Q4" — say "clients," not "brands," "going into Q4" not "ahead of Q4," and don't add a separate "and start focusing on growth" clause, "going into Q4" already covers it).
-2. One confidence-statement sentence starting "We're confident..." (never "We feel confident"), matched to their actual TikTok Shop status, avoiding "lay the foundation," "further," and avoiding reusing "momentum" (already used elsewhere in the sequence):
-   - Not on TikTok Shop: keep it simple, just "a meaningful channel" — e.g. "we're confident TikTok Shop can become a meaningful channel for [Company] going into the holiday season." Don't claim to "turn it into" or "position it on" TikTok Shop when they aren't using the platform yet.
-   - Already on TikTok Shop: something like "we're confident we can help turn TikTok Shop into a meaningful revenue channel for [Company] during the holiday season."
-3. One question from the question bank above, matched to their TikTok Shop status (not on TTS: the "going into the holiday season" variant; already on TTS: the "something the team's been considering" or "is this currently a priority for... to explore" variant) — never the generic "is TikTok Shop a priority" question for a brand that's already live there.`;
+        : `This is follow-up 2 (roughly 35-50 words, not the last touch; follow-up 1 already covered the context/credibility/meeting ask — do NOT repeat that ground). Keep it to a simple, light nudge. Shape:
+1. A short why-now beat about the agency onboarding its last few clients ${tf.timing} (paraphrase naturally, say "clients," not "brands"; don't add an "and start focusing on growth" clause).
+2. One confidence sentence starting "We're confident..." (never "We feel confident"), matched to their TikTok Shop status, avoiding "lay the foundation," "further," and "momentum":
+   - Not on TikTok Shop: "we're confident TikTok Shop can become a meaningful channel for [Company] ${tf.timing}."
+   - Already on TikTok Shop: "we're confident we can help turn TikTok Shop into a meaningful revenue channel for [Company] ${tf.timing}."
+3. One short question matched to their status — don't ask a brand already on TikTok Shop whether they've "considered" it.`;
 
-  const followUpStructure = `Follow-up general rules: assume no response has come in yet. Ground everything in something specific to THIS company from the record (hero SKU, category detail, TikTok Shop status) — not a generic nudge that could apply to any brand. Never "just checking in," never re-explain the original pitch verbatim, no mechanical transitions like "since I reached out last week" or "following up on my last note." At most one question mark in the entire body.
+  const followUpStructure = `Follow-up general rules: assume no response has come in yet. Keep it SIMPLE and human — a short, natural nudge, not a personalized mini-pitch. You may ground it lightly in the brand's category or TikTok Shop status, but do NOT dig for brand-specific stats, do NOT name a hero SKU, and do NOT stack multiple specifics. Never "just checking in," never re-explain the original pitch verbatim, no mechanical transitions like "since I reached out last week" or "following up on my last note." At most one question mark in the entire body.
 
 ${stepStructure}`;
 
@@ -73,9 +76,7 @@ ${stepStructure}`;
   }`;
 
   const userPrompt = `Company: ${email.contact.company.name} (${email.contact.company.domain})
-Hero SKU: ${email.contact.company.heroSku ?? "unknown"} ${email.contact.company.skuPrice ?? ""}
 Archetype: ${email.contact.company.archetype ?? "unknown"}
-Account thesis: ${email.contact.company.accountThesis ?? "none on file"}
 TikTok Shop status: ${email.contact.company.ttsStatus ?? "unknown"}
 
 Contact: ${email.contact.name}, ${email.contact.title}

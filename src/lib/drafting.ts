@@ -49,7 +49,7 @@ Non-negotiable rules:
 - "We feel confident" is banned — write "We're confident" instead.
 - "Further" is banned as a filler word ("scale further," "further on TikTok Shop") — cut it, the sentence works without it.
 - Dollar figures: lowercase "k" and "m" (e.g. "$150k," "$2m"), never uppercase, and phrase as "$X in monthly GMV," not "$X monthly GMV."
-- "Ahead of Q4" is fine for a scene-setting opener ("Ahead of Q4, I've been looking into..."), but for anything implying a deadline or timeframe for onboarding/deciding, use "going into Q4" instead — "ahead of" implies Q4 is still far off, and by the time these actually send it usually isn't.
+- Timing/"why now" phrasing is provided to you per-draft (the seasonally-correct opener and timeframe words) — use THOSE exact phrases and never hardcode "Q4" or "Black Friday" yourself unless the provided phrasing uses them. The provided words are already correct for the current date, so don't substitute "ahead of Q4" when it's no longer ahead.
 - Greeting: "Hey [First name]," — not "Hi."
 - Subject lines: prefer the literal format "[Brand] x DGA (TikTok Shop)" — short, plain, not a full sentence. Only deviate from that format if it would read awkwardly for a specific brand name.
 - At most one question mark in the entire email body. One ask, asked once — never stack a second direct question (e.g. a category question plus a separate CTA question) even if both feel soft individually.
@@ -71,14 +71,40 @@ Non-negotiable rules:
     - Not on TikTok Shop: "Is scaling on TikTok Shop [ending]" — senior contacts can drop a softer "or on your radar" hedge some of these endings would otherwise carry; junior contacts can keep it.
     - Already on TikTok Shop, GMV known: "Is scaling to [the real known monthly GMV figure, or 'six and seven-figure' if that's the framing being used] monthly GMV [ending]"
     - Already on TikTok Shop, GMV not known: "Is scaling on TikTok Shop [ending]" (never "scaling further," "further" is banned, see above)
-  - Timing in the question itself: "going into Q4," not "ahead of Q4" (see the Q4-phrasing rule above).
-  - Later touches, not on TTS: "Is scaling on TikTok Shop a priority for the team going into the holiday season?"
+  - Timing in the question itself: use the provided mid-sentence timeframe phrase (see the timing rule above), not a hardcoded "Q4".
+  - Later touches, not on TTS: "Is scaling on TikTok Shop a priority for the team [provided timeframe]?"
   - Later touches, already on TTS: "Is scaling on TikTok Shop something the team's been considering?" or "Is this currently a priority for [you/the team/Company] to explore?"
   - Do not use: "Has [Company] looked seriously at TikTok Shop yet?" or "How is [Company] thinking about TikTok Shop?" — too direct, demands a strategic answer instead of an easy yes/no.
 - Do not literally name the contact's title or decision role in the email body (never write "as the Ecommerce Manager..." or "given your role in...").
 - Avoid em dashes (—). If a sentence would naturally use one, either rewrite it as two sentences or use a single hyphen (-) instead. Do not overuse hyphens as a substitute either — prefer plain sentence structure.
 - Respect multi-thread sequencing: a functional owner gets the primary technical/operational pitch; a routing/champion contact gets a lighter "who owns this decision" message; the economic buyer is only approached directly when warranted (large deal, no response from others, or a small/founder-led company where the founder is the economic buyer).
 - In claimsNotToMake, list anything you deliberately left vague or unclaimed due to lack of evidence.`;
+
+// Seasonally-correct "why now" phrasing, computed at draft time so the copy
+// never goes stale as the calendar moves (the old hardcoded "ahead of Q4"
+// read wrong once Q4 actually arrived). Both the first-touch and follow-up
+// templates pull their timing words from here instead of writing "Q4".
+//   opener  — sentence-start scene-setter ("Ahead of Q4," / "Heading into the holidays,")
+//   timing  — mid-sentence timeframe ("going into Q4" / "this holiday season")
+//   season  — noun phrase for the period ("the Q4 push" / "the holiday season")
+export function currentTimeframe(now = new Date()): {
+  opener: string;
+  timing: string;
+  season: string;
+} {
+  const month = now.getMonth() + 1; // 1-12
+  if (month >= 7 && month <= 9) {
+    return { opener: "Ahead of Q4", timing: "going into Q4", season: "the Q4 run-up" };
+  }
+  if (month >= 10 && month <= 12) {
+    return {
+      opener: "Heading into the holidays",
+      timing: "this holiday season",
+      season: "the holiday season",
+    };
+  }
+  return { opener: "This year", timing: "this year", season: "this year" };
+}
 
 // Only reference Q4/Black Friday when it's actually seasonally true, so the
 // framing doesn't go stale as the calendar moves past this launch window.
@@ -88,7 +114,7 @@ function getSeasonalFramingInstruction(now = new Date()): string {
     return `Mention that brands are actively getting set up on TikTok Shop ahead of Q4 and Black Friday — it's currently ${now.toLocaleString("en-US", { month: "long" })}, so this framing is timely.`;
   }
   if (month >= 10 && month <= 12) {
-    return `Mention that a lot of brands are getting set up on TikTok Shop right now for Black Friday and the Q4 push — it's currently ${now.toLocaleString("en-US", { month: "long" })}, so this is happening now, not "coming up."`;
+    return `Mention that a lot of brands are getting set up on TikTok Shop right now for Black Friday and the holiday push — it's currently ${now.toLocaleString("en-US", { month: "long" })}, so this is happening now, not "coming up."`;
   }
   return `Skip the Q4/Black Friday framing entirely — it's currently ${now.toLocaleString("en-US", { month: "long" })}, too far past that season to reference it naturally. Use a general "brands are adopting TikTok Shop this year" framing instead if a why-now beat is needed at all.`;
 }
@@ -186,21 +212,25 @@ export async function draftFirstEmail(
   const variantHint =
     variant === "A" ? settings.abVariantAHint : variant === "B" ? settings.abVariantBHint : null;
 
+  const tf = currentTimeframe();
+
   const firstTouchStructure = `First-touch structure — this must match the finalized template exactly. Exactly THREE paragraphs after the greeting, nothing more:
+
+Timing words to use for any "why now" reference in this email (already correct for today's date — use these exact phrases, never write "Q4" yourself): opener = "${tf.opener}", mid-sentence timeframe = "${tf.timing}".
 
 1. Who we are — one short clause, own paragraph, and its shape depends on whether you have a real GMV figure to cite in step 2:
    - If you'll be citing a real, known monthly GMV figure for this prospect in step 2: "I'm David - my team and I partner with TikTok to help identify and scale brands on TikTok Shop." (the specific number belongs in step 2, not duplicated here)
    - If you won't have a specific number to cite (not on TikTok Shop, or on it but no known GMV figure): "I'm David - my team and I partner with TikTok to help identify and scale brands to six and seven-figure monthly GMV on TikTok Shop."
    Always "David" — never a different or invented name, it must match the sender's real name in the signature below. Paraphrase the rest of the sentence naturally, don't copy verbatim every time. Don't spell out "DGA" here (it's implied by the sender's email/signature).
-2. Category + status, own paragraph, exactly ONE plain sentence, nothing else added to it: "Ahead of Q4, I've been looking closely at the [category] category and noticed [Company] [status]." This is the SECOND mention of TikTok Shop in the email — say "the platform" here, not "TikTok Shop" and not "Shop" (see the mention-rotation rule below). ${getSeasonalFramingInstruction()} The status MUST match their actual TikTok Shop status (given below) — three real cases, never blur them:
+2. Category + status, own paragraph, exactly ONE plain sentence, nothing else added to it: "${tf.opener}, I've been looking closely at the [category] category and noticed [Company] [status]." This is the SECOND mention of TikTok Shop in the email — say "the platform" here, not "TikTok Shop" and not "Shop" (see the mention-rotation rule below). ${getSeasonalFramingInstruction()} The status MUST match their actual TikTok Shop status (given below) — three real cases, never blur them:
    - Not on TikTok Shop: "...noticed [Company] isn't on the platform."
    - Already on TikTok Shop, real GMV figure genuinely known/sourced: state it directly — "...noticed [Company] is doing $X in monthly GMV on the platform." Never invent or round-estimate this figure.
    - Already on TikTok Shop, no known GMV figure: keep it plain — "...noticed [Company] is on the platform." Never say "already" or "live on," both read weak.
    - On the platform but status otherwise unclear/thin: keep it at the category level rather than guessing a status.
    Never default to "not on TikTok Shop" if the record shows otherwise — this has been wrong before when the record was thin instead of actually checked. This sentence is the ONLY place anything brand-specific belongs in a first touch — do NOT add a hero SKU, retail presence, press, or any other specific detail anywhere in this email, first touch stays this simple every time. That kind of detail belongs in the follow-up sequence, not here.
 3. The ask, own paragraph, exactly one question, matched to which case applied in step 2 — and NEVER use "priority" in a first-touch question, that framing is reserved for later touches only. This is the THIRD mention — say "Shop" here (not "TikTok Shop," not "the platform"):
-   - If a real GMV figure was cited in step 2: "Is scaling to six and seven-figure monthly GMV currently on [your/the team's] radar going into Q4?" (no third mention needed in this variant — the GMV figure itself carries it)
-   - Otherwise (not on TikTok Shop, or on it with GMV unknown): "Is scaling on Shop something [you've/the team's] explored going into Q4?" — or for variety, "Is scaling on Shop currently on [your/the team's] radar going into Q4?"
+   - If a real GMV figure was cited in step 2: "Is scaling to six and seven-figure monthly GMV currently on [your/the team's] radar ${tf.timing}?" (no third mention needed in this variant — the GMV figure itself carries it)
+   - Otherwise (not on TikTok Shop, or on it with GMV unknown): "Is scaling on Shop something [you've/the team's] explored ${tf.timing}?" — or for variety, "Is scaling on Shop currently on [your/the team's] radar ${tf.timing}?"
    Use [your] for a senior/economic-buyer contact, [the team's] for a junior/operational contact. This is the only question mark in the email.
 
 Mention-rotation rule for "TikTok Shop" across the email: 1st mention (step 1) = "TikTok Shop" in full, 2nd mention (step 2) = "the platform", 3rd mention if there is one (step 3) = "Shop". Never say "TikTok Shop" more than once in the same email.`;
