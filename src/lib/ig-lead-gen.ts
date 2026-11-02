@@ -151,24 +151,28 @@ export async function generateIgLeadBatch(opts: {
       website = resolved?.websiteUrl ?? null;
     }
 
-    const ig = await runInstagramVerification({
-      name: c.brand,
-      websiteUrl: website,
-      // A proposed handle turns the verification into a fast confirm (instead
-      // of discovering from scratch), raising throughput and the hit rate.
-      proposedInstagramUrl: c.instagramUrl?.trim() || null,
-    }).catch(() => null);
+    // IG verification and TikTok-Shop status are independent — run them in
+    // parallel to roughly halve per-candidate latency (the TTS result is
+    // simply discarded if the IG handle turns out unconfirmed).
+    const [ig, tts] = await Promise.all([
+      runInstagramVerification({
+        name: c.brand,
+        websiteUrl: website,
+        // A proposed handle turns verification into a fast confirm (instead
+        // of discovering from scratch), raising throughput and the hit rate.
+        proposedInstagramUrl: c.instagramUrl?.trim() || null,
+      }).catch(() => null),
+      checkTikTokShopStatus({ name: c.brand, websiteUrl: website }).catch(() => ({
+        status: "Unverified" as const,
+        evidence: "",
+        tiktokHandle: "",
+      })),
+    ]);
 
     if (!ig || ig.status === "not_found" || !ig.instagramUrl) {
       skippedUnverified++;
       return null;
     }
-
-    const tts = await checkTikTokShopStatus({ name: c.brand, websiteUrl: website }).catch(() => ({
-      status: "Unverified" as const,
-      evidence: "",
-      tiktokHandle: "",
-    }));
     if (tts.status === "Scaled TikTok Shop") {
       // Already scaled on TikTok Shop — not a good IG-DM target.
       return null;
@@ -209,10 +213,12 @@ export async function generateIgLeadBatch(opts: {
     });
   }
 
-  // Concurrency-capped worker loop. Each candidate is a few web searches, so
-  // the limit is wall-clock, not CPU — run a wide pool to fit more in the
-  // ~55s budget.
-  const CONCURRENCY = 8;
+  // Concurrency-capped worker loop. Each candidate is a couple of web
+  // searches (wall-clock bound, not CPU), so run a pool. `deadline` stops
+  // workers from STARTING new candidates late; `hardStop` guarantees we
+  // return before Vercel's 60s function limit even if some are still
+  // in-flight (their rows just aren't saved this run).
+  const CONCURRENCY = 6;
   let idx = 0;
   async function worker() {
     while (idx < candidates.length && generated.length < count && !deadline.expired()) {
@@ -221,7 +227,11 @@ export async function generateIgLeadBatch(opts: {
       if (lead && generated.length < count) generated.push(lead);
     }
   }
-  await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+  const hardStop = new Promise<void>((resolve) => setTimeout(resolve, deadline.remainingMs() + 4000));
+  await Promise.race([
+    Promise.all(Array.from({ length: CONCURRENCY }, worker)),
+    hardStop,
+  ]);
 
   return { generated, checked, skippedDuplicate, skippedUnverified };
 }

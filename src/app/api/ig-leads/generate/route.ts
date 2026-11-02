@@ -18,7 +18,9 @@ export async function POST(request: Request) {
       count: Number(body?.count) || 10,
       category: body?.category?.trim() || undefined,
       seedBrands: (body?.seedBrands ?? []).map((s) => s.trim()).filter(Boolean),
-      timeBudgetMs: 55_000,
+      // Budget leaves headroom: the generator hard-stops ~4s after this and
+      // must return before Vercel's 60s function limit.
+      timeBudgetMs: 48_000,
     });
     return NextResponse.json({
       generated: result.generated,
