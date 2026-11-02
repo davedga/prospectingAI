@@ -36,19 +36,21 @@ export async function buildDedupeIndex(): Promise<DedupeIndex> {
   for (const r of companies) keys.add(normalizeBrand(r.name));
   keys.delete("");
 
-  // Substring match in both directions: a candidate "saie" should collide
-  // with a stored "saiebeauty", and vice versa. Guard against very short
-  // keys (< 4 chars) that would match almost anything.
-  const long = [...keys].filter((k) => k.length >= 4);
+  // Substring match ONE direction only: a stored name/handle/domain that
+  // contains the candidate (e.g. stored "saiebeauty" contains candidate
+  // "saie"). The reverse direction (candidate contains a stored word) caused
+  // heavy false-positive over-filtering, so it's dropped. Require >= 6 chars
+  // for the fuzzy path so short names don't collide with everything.
+  const stored6 = [...keys].filter((k) => k.length >= 6);
 
   return {
     keys,
     has(brand: string): boolean {
       const k = normalizeBrand(brand);
       if (!k) return true; // treat an empty/garbage name as "already taken"
-      if (keys.has(k)) return true;
-      if (k.length < 4) return false;
-      return long.some((stored) => stored.includes(k) || k.includes(stored));
+      if (keys.has(k)) return true; // exact normalized match
+      if (k.length < 6) return false;
+      return stored6.some((stored) => stored.includes(k));
     },
   };
 }

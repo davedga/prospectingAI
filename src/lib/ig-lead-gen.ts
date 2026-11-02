@@ -77,7 +77,9 @@ async function brainstorm(opts: {
   seedBrands?: string[];
   excludedSample: string[];
 }): Promise<Candidate[]> {
-  const want = Math.min(opts.count * 4 + 8, 48);
+  // Keep the brainstorm small enough that the tool output doesn't overflow
+  // max_tokens (which silently truncates to zero usable candidates).
+  const want = Math.min(opts.count * 2 + 8, 28);
   const system = `You source TikTok-Shop IG-DM leads for Dallas Global Agency. DGA runs TikTok Shop for brands, so targets are brands that would BENEFIT from a TikTok Shop and don't run one at scale yet.
 
 Criteria (loose — these are DM leads, not the strict email ICP):
@@ -96,7 +98,7 @@ Call propose_ig_leads with ~${want} candidates. Don't fabricate facts; keep reve
 
   const msg = await anthropic.messages.create({
     model: CLAUDE_MODEL,
-    max_tokens: 8000,
+    max_tokens: 12000,
     system,
     tools: [PROPOSE_TOOL],
     tool_choice: { type: "tool", name: "propose_ig_leads" },
